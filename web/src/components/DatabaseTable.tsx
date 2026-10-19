@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ProductWithDiscount } from '../types';
 import { format, isValid, parseISO } from 'date-fns';
+import { EmptyState } from './PageState';
+import { ExternalLinkIcon, FilterIcon, ImageIcon } from './Icons';
 import './DatabaseTable.css';
 
 // Product images come through the scraper API's image proxy (cached there).
@@ -15,10 +17,7 @@ const ProductThumbnail: React.FC<{ productId: number; hasImage: boolean; name: s
   if (!hasImage || failed) {
     return (
       <span className="product-thumb product-thumb-empty" aria-hidden="true">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M2.5 11.5l3.5-3.5 2.5 2.5 2-2 3 3" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-        </svg>
+        <ImageIcon />
       </span>
     );
   }
@@ -28,8 +27,8 @@ const ProductThumbnail: React.FC<{ productId: number; hasImage: boolean; name: s
       src={imageUrl(productId)}
       alt={name}
       loading="lazy"
-      width={36}
-      height={36}
+      width={40}
+      height={40}
       onError={() => setFailed(true)}
     />
   );
@@ -37,14 +36,30 @@ const ProductThumbnail: React.FC<{ productId: number; hasImage: boolean; name: s
 
 interface DatabaseTableProps {
   data: ProductWithDiscount[];
+  loading?: boolean;
   columnFilters: Record<string, string>;
   onColumnFilterChange: (column: string, value: string) => void;
+  onClearFilters: () => void;
 }
 
-const DatabaseTable: React.FC<DatabaseTableProps> = ({ 
+const columns = [
+  { key: 'category', label: 'Category', width: '180px' },
+  { key: 'name', label: 'Product name', width: 'auto' },
+  { key: 'supermarket', label: 'Supermarket', width: '140px' },
+  { key: 'discount.discount_price', label: 'Discount price', width: '140px', numeric: true },
+  { key: 'discount.original_price', label: 'Original price', width: '140px', numeric: true },
+  { key: 'discount.special_discount', label: 'Special discount', width: '160px' },
+  { key: 'discount.expire_date', label: 'Expire date', width: '140px' },
+];
+
+const SKELETON_ROWS = 8;
+
+const DatabaseTable: React.FC<DatabaseTableProps> = ({
   data,
+  loading = false,
   columnFilters,
-  onColumnFilterChange 
+  onColumnFilterChange,
+  onClearFilters,
 }) => {
   const [showColumnFilters, setShowColumnFilters] = useState<string[]>([]);
 
@@ -65,22 +80,12 @@ const DatabaseTable: React.FC<DatabaseTableProps> = ({
   };
 
   const toggleColumnFilter = (column: string) => {
-    setShowColumnFilters(prev => 
-      prev.includes(column) 
+    setShowColumnFilters(prev =>
+      prev.includes(column)
         ? prev.filter(c => c !== column)
         : [...prev, column]
     );
   };
-
-  const columns = [
-    { key: 'category', label: 'Category', width: '180px' },
-    { key: 'name', label: 'Product Name', width: 'auto' },
-    { key: 'supermarket', label: 'Supermarket', width: '140px' },
-    { key: 'discount.discount_price', label: 'Discount Price', width: '140px' },
-    { key: 'discount.original_price', label: 'Original Price', width: '140px' },
-    { key: 'discount.special_discount', label: 'Special Discount', width: '160px' },
-    { key: 'discount.expire_date', label: 'Expire Date', width: '140px' },
-  ];
 
   const getCellValue = (item: ProductWithDiscount, columnKey: string): React.ReactNode => {
     if (columnKey === 'discount.expire_date') {
@@ -88,43 +93,29 @@ const DatabaseTable: React.FC<DatabaseTableProps> = ({
     } else if (columnKey === 'category') {
       return item.category;
     } else if (columnKey === 'name') {
-      const thumbnail = <ProductThumbnail productId={item.id} hasImage={!!item.image_url} name={item.name} />;
-      if (item.product_url) {
-        return (
-          <span className="product-name-cell">
-            {thumbnail}
-            {item.name}
+      return (
+        <span className="product-name-cell">
+          <ProductThumbnail productId={item.id} hasImage={!!item.image_url} name={item.name} />
+          <span className="product-name">{item.name}</span>
+          {item.product_url && (
             <a
               href={item.product_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="product-link"
+              className="btn btn-quiet btn-sm icon-btn product-link"
+              aria-label={`View ${item.name} on the supermarket website`}
               title="View on supermarket website"
               onClick={(e) => e.stopPropagation()}
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <path
-                  d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7M8 1h3m0 0v3m0-3L5.5 6.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <ExternalLinkIcon />
             </a>
-          </span>
-        );
-      }
-      return (
-        <span className="product-name-cell">
-          {thumbnail}
-          {item.name}
+          )}
         </span>
       );
     } else if (columnKey === 'supermarket') {
       return item.supermarket;
     } else if (columnKey === 'discount.discount_price') {
-      return formatPrice(item.discount.discount_price);
+      return <span className="t-strong">{formatPrice(item.discount.discount_price)}</span>;
     } else if (columnKey === 'discount.original_price') {
       return formatPrice(item.discount.original_price);
     } else if (columnKey === 'discount.special_discount') {
@@ -133,94 +124,110 @@ const DatabaseTable: React.FC<DatabaseTableProps> = ({
     return '—';
   };
 
-  const emptyState = (
-    <div className="empty-content">
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-        <path
-          d="M40 18V38C40 39.1046 39.1046 40 38 40H10C8.89543 40 8 39.1046 8 38V10C8 8.89543 8.89543 8 10 8H30"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <path
-          d="M16 24H32M16 32H24"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
-      <p className="empty-text">No discounts found</p>
-      <p className="empty-subtext">Try adjusting your filters</p>
-    </div>
-  );
+  const hasFilters = Object.values(columnFilters).some(Boolean);
 
   return (
-    <div className="database-table-wrapper">
-      <div className="database-table-scroll">
-        <table className="database-table">
-          <thead>
-            <tr className="table-header-row">
-              {columns.map((column) => (
+    <div className="table-wrap database-table-scroll">
+      <table className="table database-table" aria-busy={loading}>
+        <thead>
+          <tr>
+            {columns.map((column) => {
+              const filterOpen = showColumnFilters.includes(column.key);
+              const filterSet = !!columnFilters[column.key];
+              return (
                 <th
                   key={column.key}
-                  className="table-header-cell"
+                  className={column.numeric ? 'num' : undefined}
                   style={{ width: column.width }}
                 >
                   <div className="header-content">
                     <span className="header-label">{column.label}</span>
                     <button
-                      className="filter-toggle-button"
+                      type="button"
+                      className={`btn btn-quiet btn-sm icon-btn filter-toggle-button${filterOpen || filterSet ? ' is-active' : ''}`}
                       onClick={() => toggleColumnFilter(column.key)}
+                      aria-label={`Filter ${column.label.toLowerCase()}`}
+                      aria-expanded={filterOpen}
                       title="Filter column"
                     >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path
-                          d="M2 3.5H12M4 7H10M6 10.5H8"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
+                      <FilterIcon />
                     </button>
                   </div>
-                  {showColumnFilters.includes(column.key) && (
+                  {filterOpen && (
                     <div className="column-filter">
                       <input
                         type="text"
-                        className="column-filter-input"
-                        placeholder={`Filter ${column.label.toLowerCase()}...`}
+                        className="input column-filter-input"
+                        aria-label={`Filter ${column.label.toLowerCase()}`}
+                        placeholder={`Filter ${column.label.toLowerCase()}…`}
                         value={columnFilters[column.key] || ''}
                         onChange={(e) => onColumnFilterChange(column.key, e.target.value)}
                         onClick={(e) => e.stopPropagation()}
+                        autoFocus
                       />
                     </div>
                   )}
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="empty-state">
-                  {emptyState}
-                </td>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {loading ? (
+            Array.from({ length: SKELETON_ROWS }, (_, row) => (
+              <tr key={row} className="skeleton-row">
+                {columns.map((column) => (
+                  <td key={column.key} className={column.numeric ? 'num' : undefined}>
+                    {column.key === 'name' ? (
+                      <span className="product-name-cell">
+                        <span className="skel thumb-skel" />
+                        <span className="skel skel-line" style={{ width: `${60 + ((row * 7) % 30)}%` }} />
+                      </span>
+                    ) : (
+                      <span className="skel skel-line" />
+                    )}
+                  </td>
+                ))}
               </tr>
-            ) : (
-              data.map((item) => (
-                <tr key={item.id} className="table-row">
-                  {columns.map((column) => (
-                    <td key={column.key} className="table-cell" data-label={column.label}>
-                      {getCellValue(item, column.key)}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+            ))
+          ) : data.length === 0 ? (
+            <tr className="empty-row">
+              <td colSpan={columns.length}>
+                {hasFilters ? (
+                  <EmptyState
+                    title="No discounts match your filters"
+                    message="Nothing matches the search and column filters. Clear them to see all current discounts."
+                  >
+                    <button type="button" className="btn btn-secondary" onClick={onClearFilters}>
+                      Clear filters
+                    </button>
+                  </EmptyState>
+                ) : (
+                  <EmptyState
+                    title="No discounts yet"
+                    message="Discounts appear here after an offers run. Start one for a supermarket under Configuraties."
+                  />
+                )}
+              </td>
+            </tr>
+          ) : (
+            data.map((item) => (
+              <tr key={item.id}>
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    className={[column.numeric && 'num', column.key === 'name' && 'cell-name']
+                      .filter(Boolean)
+                      .join(' ') || undefined}
+                  >
+                    {getCellValue(item, column.key)}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
     </div>
   );
 };

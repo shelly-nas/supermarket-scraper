@@ -5,7 +5,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Discount Scraper</title>
+    <title>Supermarket Scraper</title>
+    <script>
+        // Set the theme class before the first paint, so dark mode never flashes white.
+        (function () {
+            var mode = 'system';
+            try { mode = localStorage.getItem('theme') || 'system'; } catch (e) { }
+            var dark = mode === 'dark' || (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.classList.add(dark ? 'theme-dark' : 'theme-light');
+        })();
+    </script>
 </head>
 
 <body>

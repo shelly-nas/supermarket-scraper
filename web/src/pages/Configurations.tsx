@@ -3,6 +3,9 @@ import { configurationsService } from '../services/api';
 import { ConfigurationsStats, SupermarketStatus, ScraperRun } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
 import CatalogSection from '../components/CatalogSection';
+import StatusBadge from '../components/StatusBadge';
+import { EmptyState, ErrorAlert, ErrorState } from '../components/PageState';
+import { AlertIcon, ChevronLeftIcon, ChevronRightIcon } from '../components/Icons';
 import './Configurations.css';
 
 const Configurations: React.FC = () => {
@@ -21,6 +24,7 @@ const Configurations: React.FC = () => {
   });
   const [runningScrapers, setRunningScrapers] = useState<Set<string>>(new Set());
   const [togglingSchedule, setTogglingSchedule] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState<string | null>(null);
   
   // Logs state
   const [runs, setRuns] = useState<ScraperRun[]>([]);
@@ -51,7 +55,7 @@ const Configurations: React.FC = () => {
       setStats(configurationsStats);
       setStatuses(supermarketStatuses);
     } catch (err) {
-      setError('Failed to load configurations data. Please try again.');
+      setError('Failed to load configurations data.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -95,7 +99,7 @@ const Configurations: React.FC = () => {
       await loadLogs(); // Also reload logs to show the new run
     } catch (err) {
       console.error('Failed to run scraper:', err);
-      alert('Failed to run scraper. Please check the logs.');
+      setActionError('The offers run failed. Check the scraper run logs below for the cause.');
     } finally {
       // Remove from running scrapers
       setRunningScrapers(prev => {
@@ -117,7 +121,7 @@ const Configurations: React.FC = () => {
       await loadConfigurationsData();
     } catch (err) {
       console.error('Failed to toggle scheduled run:', err);
-      alert('Failed to update schedule setting.');
+      setActionError('Could not change the automatic re-scrape. Try again in a moment.');
     } finally {
       setTogglingSchedule(prev => {
         const next = new Set(prev);
@@ -130,32 +134,6 @@ const Configurations: React.FC = () => {
   const isExpired = (expireDate: string | null | undefined): boolean => {
     if (!expireDate) return false;
     return new Date(expireDate) < new Date();
-  };
-
-  const getStatusClass = (status: 'success' | 'failed' | 'running' | 'pending') => {
-    switch (status) {
-      case 'success':
-        return 'status-success';
-      case 'failed':
-        return 'status-failed';
-      case 'running':
-        return 'status-running';
-      default:
-        return 'status-pending';
-    }
-  };
-
-  const getStatusText = (status: 'success' | 'failed' | 'running' | 'pending') => {
-    switch (status) {
-      case 'success':
-        return 'Success';
-      case 'failed':
-        return 'Failed';
-      case 'running':
-        return 'Running';
-      default:
-        return 'Pending';
-    }
   };
 
   // Pagination helpers
@@ -173,7 +151,7 @@ const Configurations: React.FC = () => {
   };
 
   const formatDuration = (durationSeconds: number | null | undefined): string => {
-    if (!durationSeconds) return 'N/A';
+    if (!durationSeconds) return '—';
     const minutes = Math.floor(durationSeconds / 60);
     const remainingSeconds = durationSeconds % 60;
     if (minutes > 0) {
@@ -182,13 +160,41 @@ const Configurations: React.FC = () => {
     return `${durationSeconds}s`;
   };
 
+
+  const formatCount = (value: number | undefined) => (value || 0).toLocaleString('nl-NL');
+
+  const pageHeader = (
+    <header className="page-header">
+      <div className="page-header-text">
+        <h1 className="t-title">Configuraties</h1>
+        <p className="t-small">Monitor your scraper performance</p>
+      </div>
+    </header>
+  );
+
   if (loading && !stats) {
     return (
-      <div className="configurations">
-        <div className="configurations-loading">
-          <div className="loading-spinner"></div>
-          <p>Loading configurations...</p>
+      <div className="configurations" aria-busy="true">
+        {pageHeader}
+        <div className="kpi-grid">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="card kpi-card">
+              <span className="skel skel-line" style={{ width: '50%' }} />
+              <span className="skel kpi-value-skel" />
+            </div>
+          ))}
         </div>
+        <section className="page-section">
+          <div className="supermarket-grid">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="card supermarket-card">
+                <span className="skel skel-line" style={{ width: '40%' }} />
+                <span className="skel skel-line" style={{ width: '70%' }} />
+                <span className="skel skel-line" style={{ width: '55%' }} />
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     );
   }
@@ -196,11 +202,16 @@ const Configurations: React.FC = () => {
   if (error && !stats) {
     return (
       <div className="configurations">
-        <div className="configurations-error">
-          <p>{error}</p>
-          <button onClick={loadConfigurationsData} className="retry-button">
-            Retry
-          </button>
+        {pageHeader}
+        <div className="card">
+          <ErrorState
+            title="Couldn't load configurations"
+            message="The scraper API did not answer. Scheduled runs keep going on the server; try again in a moment."
+          >
+            <button type="button" onClick={loadConfigurationsData} className="btn btn-primary">
+              Try again
+            </button>
+          </ErrorState>
         </div>
       </div>
     );
@@ -208,43 +219,44 @@ const Configurations: React.FC = () => {
 
   return (
     <div className="configurations">
-      <div className="configurations-header">
-        <h1 className="configurations-title">Configuraties</h1>
-        <p className="configurations-subtitle">Monitor your scraper performance</p>
-      </div>
+      {pageHeader}
+
+      {actionError && <ErrorAlert message={actionError} onDismiss={() => setActionError(null)} />}
 
       {/* KPI Cards */}
       <div className="kpi-grid">
-        <div className="kpi-card">
-          <div className="kpi-label">Total Runs</div>
-          <div className="kpi-value">{stats?.totalRuns || 0}</div>
+        <div className="card kpi-card">
+          <span className="t-label">Total runs</span>
+          <span className="kpi-value">{formatCount(stats?.totalRuns)}</span>
         </div>
-        <div className="kpi-card">
-          <div className="kpi-label">Success Rate</div>
-          <div className="kpi-value">{stats?.successRate || 0}%</div>
+        <div className="card kpi-card">
+          <span className="t-label">Success rate</span>
+          <span className="kpi-value">{stats?.successRate || 0}%</span>
         </div>
-        <div className="kpi-card">
-          <div className="kpi-label">Scraped Products</div>
-          <div className="kpi-value">{stats?.scrapedProducts || 0}</div>
+        <div className="card kpi-card">
+          <span className="t-label">Scraped products</span>
+          <span className="kpi-value">{formatCount(stats?.scrapedProducts)}</span>
         </div>
-        <div className="kpi-card">
-          <div className="kpi-label">Unique Products</div>
-          <div className="kpi-value">{stats?.uniqueProducts || 0}</div>
+        <div className="card kpi-card">
+          <span className="t-label">Unique products</span>
+          <span className="kpi-value">{formatCount(stats?.uniqueProducts)}</span>
         </div>
       </div>
 
       {/* Next Scheduled Run */}
       {stats?.nextScheduledRun && (
-        <div className="schedule-card">
-          <h2 className="schedule-title">Next Scheduled Run</h2>
-          <p className="schedule-time">{stats.nextScheduledRun}</p>
+        <div className="card schedule-card">
+          <span className="t-label">Next scheduled run</span>
+          <span className="t-strong">{stats.nextScheduledRun}</span>
         </div>
       )}
 
       {/* Weekly offers */}
-      <div className="supermarket-section">
-        <h2 className="section-title">Weekly Offers</h2>
-        <p className="section-subtitle">Current discounts, re-scraped when they expire</p>
+      <section className="page-section">
+        <div className="section-header">
+          <h2 className="t-heading">Weekly offers</h2>
+          <p className="t-small">Current discounts, re-scraped when they expire</p>
+        </div>
         <div className="supermarket-grid">
           {statuses.map((status) => {
             const isRunning = runningScrapers.has(status.key);
@@ -254,171 +266,180 @@ const Configurations: React.FC = () => {
             const scheduledEnabled = status.scheduledEnabled ?? false;
 
             return (
-              <div key={status.key} className={`supermarket-card${expired ? ' supermarket-card--expired' : ''}`}>
+              <div key={status.key} className="card supermarket-card">
                 <div className="supermarket-header">
                   <h3 className="supermarket-name">{status.name}</h3>
-                  <span className={`status-badge ${getStatusClass(displayStatus)}`}>
-                    {getStatusText(displayStatus)}
-                  </span>
+                  <StatusBadge status={displayStatus} />
                 </div>
-                {status.lastRun && (
-                  <p className="supermarket-last-run">
-                    Last run: {new Date(status.lastRun).toLocaleString()}
-                  </p>
-                )}
-                {status.productsScraped !== undefined && (
-                  <p className="supermarket-products">
-                    Products: {status.productsScraped}
-                  </p>
-                )}
-                {status.promotionExpireDate && (
-                  <p className={`supermarket-expire${expired ? ' supermarket-expire--expired' : ''}`}>
-                    {expired ? 'Discounts expired' : 'Expires'}:{' '}
-                    {new Date(status.promotionExpireDate).toLocaleDateString('nl-NL')}
-                  </p>
-                )}
+                <dl className="supermarket-meta">
+                  {status.lastRun && (
+                    <div>
+                      <dt>Last run</dt>
+                      <dd>{new Date(status.lastRun).toLocaleString('nl-NL')}</dd>
+                    </div>
+                  )}
+                  {status.productsScraped !== undefined && (
+                    <div>
+                      <dt>Products</dt>
+                      <dd className="num">{status.productsScraped}</dd>
+                    </div>
+                  )}
+                  {status.promotionExpireDate && (
+                    <div>
+                      <dt>{expired ? 'Expired' : 'Expires'}</dt>
+                      <dd className={expired ? 'meta-warning' : undefined}>
+                        {expired && <AlertIcon />}
+                        {new Date(status.promotionExpireDate).toLocaleDateString('nl-NL')}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
                 <div className="card-actions">
                   <button
-                    className="run-button"
+                    type="button"
+                    className={`btn btn-secondary${isRunning ? ' is-loading' : ''}`}
                     onClick={() => handleRunScraper(status.name, status.key)}
                     disabled={isRunning}
                   >
                     {isRunning ? (
                       <>
-                        <span className="button-spinner"></span>
-                        Running...
+                        <span className="spinner" aria-hidden="true" />
+                        Running…
                       </>
                     ) : (
-                      'Run Offers'
+                      'Run offers'
                     )}
                   </button>
                   {status.promotionExpireDate != null && (
-                    <button
-                      className={`schedule-toggle-button${scheduledEnabled ? ' schedule-toggle-button--enabled' : ''}`}
-                      onClick={() => handleToggleSchedule(status.key, scheduledEnabled)}
-                      disabled={isToggling}
-                      title={scheduledEnabled ? 'Disable automatic re-scrape when discounts expire' : 'Enable automatic re-scrape when discounts expire'}
+                    <label
+                      className="switch"
+                      title="Re-scrape automatically when the discounts expire"
                     >
-                      {isToggling ? (
-                        <span className="button-spinner button-spinner--dark"></span>
-                      ) : scheduledEnabled ? (
-                        'Auto: On'
-                      ) : (
-                        'Auto: Off'
-                      )}
-                    </button>
+                      <input
+                        type="checkbox"
+                        checked={scheduledEnabled}
+                        disabled={isToggling}
+                        onChange={() => handleToggleSchedule(status.key, scheduledEnabled)}
+                      />
+                      <span className="switch-track" />
+                      Auto re-scrape
+                    </label>
                   )}
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </section>
 
       {/* Full catalog scrapes */}
       <CatalogSection />
 
       {/* Scraper Run Logs */}
-      <div className="logs-section">
-        <h2 className="section-title">Scraper Run Logs</h2>
-        
-        {logsLoading && (
-          <div className="logs-loading">
-            <div className="loading-spinner"></div>
-            <p>Loading logs...</p>
-          </div>
-        )}
+      <section className="page-section">
+        <div className="section-header">
+          <h2 className="t-heading">Scraper run logs</h2>
+          <p className="t-small">The last 50 offers runs, newest first</p>
+        </div>
 
         {logsError && (
-          <div className="logs-error">
-            <p>{logsError}</p>
-            <button onClick={loadLogs} className="retry-button">
-              Retry
-            </button>
-          </div>
+          <ErrorAlert
+            message="Could not load the scraper run logs."
+            actionLabel="Try again"
+            onDismiss={loadLogs}
+          />
         )}
 
-        {!logsLoading && !logsError && runs.length === 0 && (
-          <div className="logs-empty">
-            <p>No scraper runs yet. Start a scraper to see logs here.</p>
-          </div>
-        )}
-
-        {!logsLoading && !logsError && runs.length > 0 && (
-          <>
-            <div className="logs-table">
-              <div className="logs-table-header">
-                <div className="log-col log-col-time">Time</div>
-                <div className="log-col log-col-supermarket">Supermarket</div>
-                <div className="log-col log-col-status">Status</div>
-                <div className="log-col log-col-duration">Duration</div>
-                <div className="log-col log-col-products">Products</div>
-                <div className="log-col log-col-discounts">Discounts</div>
-              </div>
-              <div className="logs-table-body">
-                {currentRuns.map((run) => (
-                  <div key={run.id} className="log-row">
-                    <div className="log-col log-col-time">
-                      {new Date(run.startedAt).toLocaleString('nl-NL', {
-                        dateStyle: 'short',
-                        timeStyle: 'medium',
-                      })}
-                    </div>
-                    <div className="log-col log-col-supermarket">
-                      {run.supermarket.charAt(0).toUpperCase() + run.supermarket.slice(1)}
-                    </div>
-                    <div className="log-col log-col-status">
-                      <span className={`status-badge ${getStatusClass(run.status)}`}>
-                        {getStatusText(run.status)}
-                      </span>
-                    </div>
-                    <div className="log-col log-col-duration">
-                      {formatDuration(run.durationSeconds)}
-                    </div>
-                    <div className="log-col log-col-products">
-                      {run.productsScraped || 0} / {run.productsCreated || 0} / {run.productsUpdated || 0}
-                      <span className="log-col-subtitle">scraped / added / updated</span>
-                    </div>
-                    <div className="log-col log-col-discounts">
-                      {run.discountsCreated || 0} / {run.discountsDeactivated || 0}
-                      <span className="log-col-subtitle">created / deactivated</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        <div className="card logs-card">
+          {logsLoading && runs.length === 0 ? (
+            <div className="logs-skeleton" aria-busy="true">
+              {Array.from({ length: 5 }, (_, i) => (
+                <span key={i} className="skel skel-line" />
+              ))}
             </div>
+          ) : runs.length === 0 ? (
+            <EmptyState
+              title="No scraper runs yet"
+              message="Every offers run is logged here with its duration and results. Start one with Run offers above."
+            />
+          ) : (
+            <div className="table-wrap">
+              <table className="table logs-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Supermarket</th>
+                    <th>Status</th>
+                    <th className="num">Duration</th>
+                    <th className="num">Products</th>
+                    <th className="num">Discounts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentRuns.map((run) => (
+                    <tr key={run.id}>
+                      <td className="log-time">
+                        {new Date(run.startedAt).toLocaleString('nl-NL', {
+                          dateStyle: 'short',
+                          timeStyle: 'medium',
+                        })}
+                      </td>
+                      <td className="t-strong">
+                        {run.supermarket.charAt(0).toUpperCase() + run.supermarket.slice(1)}
+                      </td>
+                      <td>
+                        <StatusBadge status={run.status} />
+                      </td>
+                      <td className="num">{formatDuration(run.durationSeconds)}</td>
+                      <td className="num">
+                        {run.productsScraped || 0} / {run.productsCreated || 0} / {run.productsUpdated || 0}
+                        <span className="log-subtitle">scraped / added / updated</span>
+                      </td>
+                      <td className="num">
+                        {run.discountsCreated || 0} / {run.discountsDeactivated || 0}
+                        <span className="log-subtitle">created / deactivated</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="pagination">
-                <button
-                  className="pagination-button"
-                  onClick={handlePreviousPage}
-                  disabled={currentPage === 1}
-                >
-                  ← Previous
-                </button>
-                <span className="pagination-info">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  className="pagination-button"
-                  onClick={handleNextPage}
-                  disabled={currentPage === totalPages}
-                >
-                  Next →
-                </button>
-              </div>
-            )}
-          </>
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <nav className="pagination" aria-label="Scraper run log pages">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeftIcon />
+              Previous
+            </button>
+            <span className="t-small pagination-info">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+            >
+              Next
+              <ChevronRightIcon />
+            </button>
+          </nav>
         )}
-      </div>
+      </section>
 
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
-        title="Confirm Offers Run"
-        message={`Are you sure you want to fetch the current offers for ${confirmDialog.supermarket}?`}
-        confirmText="Run Offers"
+        title="Run offers now?"
+        message={`This fetches the current offers for ${confirmDialog.supermarket} from its website.`}
+        confirmText="Run offers"
         cancelText="Cancel"
         onConfirm={confirmRunScraper}
         onCancel={cancelRunScraper}

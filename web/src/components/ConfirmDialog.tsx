@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import './ConfirmDialog.css';
 
 interface ConfirmDialogProps {
@@ -11,6 +11,7 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
+/** Modal confirmation on a native <dialog>: focus stays inside, Escape and the backdrop cancel. */
 const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
   title,
@@ -20,27 +21,44 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  if (!isOpen) return null;
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (isOpen && !dialog.open) dialog.showModal();
+    if (!isOpen && dialog.open) dialog.close();
+  }, [isOpen]);
 
   return (
-    <div className="confirm-dialog-overlay" onClick={onCancel}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="confirm-dialog-header">
-          <h2>{title}</h2>
-        </div>
-        <div className="confirm-dialog-body">
-          <p>{message}</p>
-        </div>
+    <dialog
+      ref={dialogRef}
+      className="confirm-dialog"
+      aria-labelledby="confirm-dialog-title"
+      onCancel={(e) => {
+        e.preventDefault();
+        onCancel();
+      }}
+      onClick={(e) => {
+        // A click on the backdrop lands on the dialog element itself.
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div className="confirm-dialog-content">
+        <h2 id="confirm-dialog-title" className="t-heading">
+          {title}
+        </h2>
+        <p className="t-body">{message}</p>
         <div className="confirm-dialog-footer">
-          <button className="confirm-button-cancel" onClick={onCancel}>
+          <button type="button" className="btn btn-quiet" onClick={onCancel}>
             {cancelText}
           </button>
-          <button className="confirm-button-confirm" onClick={onConfirm}>
+          <button type="button" className="btn btn-primary" onClick={onConfirm} autoFocus>
             {confirmText}
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 };
 

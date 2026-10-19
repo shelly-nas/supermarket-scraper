@@ -7,7 +7,7 @@ Until October 2026 this project was called `discount-scraper`; see "Rename from 
 ## Features
 
 - 🛒 Scrapes discounts from multiple supermarkets (AH, Dirk, Plus)
-- 🌐 Modern web interface with Notion-like design
+- 🌐 Web interface in the shelly-nas house style, with light and dark mode
 - 📡 REST API for triggering scraper runs
 - � Comprehensive run tracking with detailed metrics
 - �🐳 Fully containerized with Docker
@@ -104,7 +104,7 @@ The application consists of three Docker services:
 
 ## Web Interface
 
-The web interface provides a clean, Notion-inspired UI for viewing and filtering discounts:
+The web interface follows the shelly-nas design guidelines (`shelly-nas/shelly-fundamentals`) and is used for viewing and filtering discounts:
 
 - **Database View**: Table display of all products and discounts
 - **Global Search**: Search across all columns simultaneously

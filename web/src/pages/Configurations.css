@@ -1,518 +1,192 @@
-.configurations {
-  min-height: 100vh;
-  background: var(--notion-bg);
-}
+/* Configurations dashboard. Cards, badges, buttons, switches and tables come
+   from components.css; this file only lays them out. */
 
-.configurations-header {
-  margin-bottom: 20px;
-}
-
-.configurations-title {
-  font-size: 32px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--notion-text);
-  margin-bottom: 4px;
-}
-
-.configurations-subtitle {
-  font-size: 13px;
-  color: var(--notion-text-secondary);
-  margin: 0;
-}
-
-.configurations-loading,
-.configurations-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 20px;
-  text-align: center;
-  color: var(--notion-text-secondary);
-}
-
-.loading-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--notion-border);
-  border-top-color: var(--notion-accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.configurations-error p {
-  margin-bottom: 16px;
-  font-size: 14px;
-}
-
-.retry-button {
-  padding: 10px 20px;
-  background: var(--notion-accent);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.retry-button:hover {
-  background: var(--notion-accent-hover);
-}
-
-/* KPI Grid */
+/* KPI cards */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
 }
 
-@media (min-width: 640px) {
+@media (min-width: 720px) {
   .kpi-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-6);
   }
 }
 
 .kpi-card {
-  background: var(--notion-surface);
-  border: 1px solid var(--notion-border);
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 1px 3px var(--notion-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
 }
 
-.kpi-label {
-  font-size: 11px;
-  color: var(--notion-text-secondary);
-  margin-bottom: 6px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.kpi-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--notion-text);
-}
-
-/* Schedule Card */
-.schedule-card {
-  background: var(--notion-surface);
-  border: 1px solid var(--notion-border);
-  border-radius: 8px;
-  padding: 16px 20px;
-  margin-bottom: 24px;
-  box-shadow: 0 1px 3px var(--notion-shadow);
-}
-
-.schedule-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--notion-text);
-  margin: 0 0 6px 0;
-}
-
-.schedule-time {
-  font-size: 14px;
-  color: var(--notion-text-secondary);
-  margin: 0;
-}
-
-/* Supermarket Section */
-.supermarket-section {
-  margin-bottom: 28px;
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--notion-text);
-  margin-bottom: 14px;
-}
-
-.section-title:has(+ .section-subtitle) {
-  margin-bottom: 4px;
-}
-
-.section-subtitle {
-  font-size: 14px;
-  color: var(--notion-text-secondary);
-  margin: 0 0 14px;
-}
-
-.supermarket-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-@media (min-width: 560px) {
-  .supermarket-grid {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+@media (min-width: 720px) {
+  .kpi-card {
+    padding: var(--space-6);
   }
 }
 
-.supermarket-card {
-  background: var(--notion-surface);
-  border: 1px solid var(--notion-border);
-  border-radius: 8px;
-  padding: 18px;
-  box-shadow: 0 1px 3px var(--notion-shadow);
-  transition: box-shadow 0.2s;
+.kpi-value {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
-.supermarket-card:hover {
-  box-shadow: 0 2px 8px var(--notion-shadow-hover);
+.kpi-value-skel {
+  display: block;
+  width: 64px;
+  height: 28px;
+}
+
+/* Next scheduled run */
+.schedule-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+}
+
+/* Supermarket cards */
+.supermarket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--space-4);
+}
+
+.supermarket-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
 }
 
 .supermarket-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .supermarket-name {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--notion-text);
   margin: 0;
-}
-
-.status-badge {
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  line-height: 1.35;
+  color: var(--text);
 }
 
-.status-success {
-  background: var(--status-success-bg);
-  color: var(--status-success-text);
+.supermarket-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-.status-failed {
-  background: var(--status-failed-bg);
-  color: var(--status-failed-text);
+.supermarket-meta > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
 
-.status-running {
-  background: var(--status-running-bg);
-  color: var(--status-running-text);
-  animation: pulse 2s ease-in-out infinite;
+.supermarket-meta dt {
+  color: var(--text-muted);
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+.supermarket-meta dd {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-body);
+  text-align: right;
 }
 
-.status-pending {
-  background: var(--status-pending-bg);
-  color: var(--status-pending-text);
+.supermarket-meta dd.num {
+  font-variant-numeric: tabular-nums;
 }
 
-.supermarket-last-run,
-.supermarket-products {
-  font-size: 13px;
-  color: var(--notion-text-secondary);
-  margin: 3px 0;
+.supermarket-meta .meta-warning {
+  color: var(--warning);
+  font-weight: 600;
 }
 
-.supermarket-expire {
-  font-size: 13px;
-  color: var(--notion-text-secondary);
-  margin: 3px 0;
+.supermarket-meta .meta-warning svg {
+  width: 16px;
+  height: 16px;
 }
 
-.supermarket-expire--expired {
-  color: #b91c1c;
-  font-weight: 500;
-}
-
-.supermarket-card--expired {
-  border-color: #fca5a5;
+.supermarket-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--error-soft);
+  color: var(--error);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .card-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.run-button {
-  flex: 1;
-  padding: 11px 16px;
-  background: var(--notion-accent);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  -webkit-tap-highlight-color: transparent;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-top: auto;
+  padding-top: var(--space-2);
 }
 
-.run-button:hover:not(:disabled) {
-  background: var(--notion-accent-hover);
+.catalog-note {
+  margin-top: var(--space-4);
 }
 
-.run-button:active:not(:disabled) {
-  transform: scale(0.98);
+/* Scraper run logs */
+.logs-card {
+  overflow: hidden;
 }
 
-.run-button:disabled {
-  background: var(--notion-border);
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.schedule-toggle-button {
-  padding: 11px 12px;
-  background: var(--notion-surface);
-  color: var(--notion-text-secondary);
-  border: 1px solid var(--notion-border);
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.schedule-toggle-button:hover:not(:disabled) {
-  border-color: var(--notion-accent);
-  color: var(--notion-accent);
-}
-
-.schedule-toggle-button--enabled {
-  background: #d1fae5;
-  color: #065f46;
-  border-color: #6ee7b7;
-}
-
-.schedule-toggle-button--enabled:hover:not(:disabled) {
-  background: #a7f3d0;
-  color: #065f46;
-  border-color: #34d399;
-}
-
-.schedule-toggle-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.play-icon {
-  font-size: 12px;
-}
-
-.button-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-.button-spinner--dark {
-  border-color: rgba(0, 0, 0, 0.15);
-  border-top-color: var(--notion-text-secondary);
-}
-
-/* Logs Section */
-.logs-section {
-  margin-bottom: 32px;
-}
-
-.logs-loading,
-.logs-error,
-.logs-empty {
+.logs-skeleton {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  text-align: center;
-  color: var(--notion-text-secondary);
-  background: var(--notion-surface);
-  border: 1px solid var(--notion-border);
-  border-radius: 8px;
+  gap: var(--space-4);
+  padding: var(--space-6);
 }
 
-.logs-table {
-  background: var(--notion-surface);
-  border: 1px solid var(--notion-border);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px var(--notion-shadow);
+.logs-table td {
+  vertical-align: top;
 }
 
-/* Desktop logs table header */
-.logs-table-header {
-  display: none;
+.logs-table .log-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
 }
 
-@media (min-width: 860px) {
-  .logs-table-header {
-    display: grid;
-    grid-template-columns: 160px 110px 90px 90px 1fr 130px;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--notion-bg);
-    border-bottom: 1px solid var(--notion-border);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--notion-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-}
-
-.logs-table-body {
-  max-height: 600px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Desktop log row */
-.log-row {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--notion-border);
-  transition: background 0.15s;
-}
-
-.log-row:last-child {
-  border-bottom: none;
-}
-
-.log-row:hover {
-  background: var(--notion-hover);
-}
-
-@media (min-width: 860px) {
-  .log-row {
-    display: grid;
-    grid-template-columns: 160px 110px 90px 90px 1fr 130px;
-    gap: 12px;
-    align-items: center;
-  }
-}
-
-/* Mobile: stacked log rows */
-@media (max-width: 859px) {
-  .log-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px 16px;
-    padding: 14px 16px;
-  }
-
-  .log-col-time {
-    grid-column: 1 / -1;
-    font-weight: 600;
-  }
-
-  .log-col-products,
-  .log-col-discounts {
-    grid-column: 1 / -1;
-  }
-}
-
-.log-col {
-  font-size: 13px;
-  color: var(--notion-text);
-  min-width: 0;
-}
-
-.log-col-time {
-  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-  font-size: 12px;
-  color: var(--notion-text-secondary);
-}
-
-.log-col-supermarket {
-  font-weight: 500;
-}
-
-.log-col-subtitle {
+.log-subtitle {
   display: block;
-  font-size: 11px;
-  color: var(--notion-text-secondary);
   margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
-/* Pagination */
 .pagination {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  margin-top: 16px;
-  padding: 12px 16px;
   flex-wrap: wrap;
-}
-
-.pagination-button {
-  padding: 8px 16px;
-  background: var(--notion-surface);
-  color: var(--notion-text);
-  border: 1px solid var(--notion-border);
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.pagination-button:hover:not(:disabled) {
-  background: var(--notion-hover);
-  border-color: var(--notion-accent);
-  color: var(--notion-accent);
-}
-
-.pagination-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 .pagination-info {
-  font-size: 13px;
-  color: var(--notion-text-secondary);
-  font-weight: 500;
-}
-
-@media (max-width: 480px) {
-  .configurations-title {
-    font-size: 24px;
-  }
-
-  .kpi-value {
-    font-size: 24px;
-  }
+  font-variant-numeric: tabular-nums;
 }

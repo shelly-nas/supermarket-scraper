@@ -1,4 +1,5 @@
 import React from 'react';
+import { CloseIcon, SearchIcon } from './Icons';
 import './SearchBar.css';
 
 interface SearchBarProps {
@@ -6,51 +7,42 @@ interface SearchBarProps {
   onChange: (value: string) => void;
   onClear: () => void;
   placeholder?: string;
+  /** Show the clear button also when only other filters are set. */
+  hasFilters?: boolean;
 }
 
-const SearchBar: React.FC<SearchBarProps> = ({ 
-  value, 
-  onChange, 
+const SearchBar: React.FC<SearchBarProps> = ({
+  value,
+  onChange,
   onClear,
-  placeholder = 'Search...'
+  placeholder = 'Search…',
+  hasFilters = false,
 }) => {
   return (
-    <div className="search-bar">
-      <div className="search-input-wrapper">
-        <svg className="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path
-            d="M13 13L9 9M10.3333 5.66667C10.3333 8.244 8.244 10.3333 5.66667 10.3333C3.08934 10.3333 1 8.244 1 5.66667C1 3.08934 3.08934 1 5.66667 1C8.244 1 10.3333 3.08934 10.3333 5.66667Z"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <input
-          type="text"
-          className="search-input"
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        {(value || Object.keys(value).length > 0) && (
-          <button
-            className="clear-button"
-            onClick={onClear}
-            title="Clear all filters"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M10.5 3.5L3.5 10.5M3.5 3.5L10.5 10.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        )}
-      </div>
+    <div className="search-bar input-wrap">
+      <SearchIcon />
+      <label htmlFor="global-search" className="visually-hidden">
+        Search
+      </label>
+      <input
+        id="global-search"
+        type="search"
+        className="input search-input"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {(value || hasFilters) && (
+        <button
+          type="button"
+          className="btn btn-quiet btn-sm icon-btn search-clear"
+          onClick={onClear}
+          aria-label="Clear all filters"
+          title="Clear all filters"
+        >
+          <CloseIcon />
+        </button>
+      )}
     </div>
   );
 };
