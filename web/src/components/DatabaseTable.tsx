@@ -3,6 +3,7 @@ import { ProductWithDiscount } from '../types';
 import { format, isValid, parseISO } from 'date-fns';
 import { EmptyState } from './PageState';
 import { ExternalLinkIcon, FilterIcon, ImageIcon } from './Icons';
+import { packSize, pricePerUnit } from '../utils/quantity';
 import './DatabaseTable.css';
 
 // Product images come through the scraper API's image proxy (cached there).
@@ -43,13 +44,14 @@ interface DatabaseTableProps {
 }
 
 const columns = [
-  { key: 'category', label: 'Category', width: '180px' },
   { key: 'name', label: 'Product name', width: 'auto' },
-  { key: 'supermarket', label: 'Supermarket', width: '140px' },
-  { key: 'discount.discount_price', label: 'Discount price', width: '140px', numeric: true },
-  { key: 'discount.original_price', label: 'Original price', width: '140px', numeric: true },
+  { key: 'supermarket', label: 'Supermarket', width: '130px' },
+  { key: 'discount.discount_price', label: 'Discount price', width: '120px', numeric: true },
+  { key: 'price_per_unit', label: 'Price per unit', width: '140px', numeric: true, filterable: false },
+  { key: 'discount.original_price', label: 'Original price', width: '120px', numeric: true },
   { key: 'discount.special_discount', label: 'Special discount', width: '160px' },
-  { key: 'discount.expire_date', label: 'Expire date', width: '140px' },
+  { key: 'discount.expire_date', label: 'Expire date', width: '130px' },
+  { key: 'category', label: 'Category', width: '160px' },
 ];
 
 const SKELETON_ROWS = 8;
@@ -96,7 +98,10 @@ const DatabaseTable: React.FC<DatabaseTableProps> = ({
       return (
         <span className="product-name-cell">
           <ProductThumbnail productId={item.id} hasImage={!!item.image_url} name={item.name} />
-          <span className="product-name">{item.name}</span>
+          <span className="product-name">
+            {item.name}
+            {packSize(item) && <span className="product-pack">{packSize(item)}</span>}
+          </span>
           {item.product_url && (
             <a
               href={item.product_url}
@@ -118,6 +123,16 @@ const DatabaseTable: React.FC<DatabaseTableProps> = ({
       return <span className="t-strong">{formatPrice(item.discount.discount_price)}</span>;
     } else if (columnKey === 'discount.original_price') {
       return formatPrice(item.discount.original_price);
+    } else if (columnKey === 'price_per_unit') {
+      const perUnit = pricePerUnit(item.discount.discount_price, item);
+      return perUnit ? (
+        <>
+          {formatPrice(perUnit.value)}
+          <span className="unit-label"> / {perUnit.unit}</span>
+        </>
+      ) : (
+        '—'
+      );
     } else if (columnKey === 'discount.special_discount') {
       return item.discount.special_discount || '—';
     }
@@ -142,16 +157,18 @@ const DatabaseTable: React.FC<DatabaseTableProps> = ({
                 >
                   <div className="header-content">
                     <span className="header-label">{column.label}</span>
-                    <button
-                      type="button"
-                      className={`btn btn-quiet btn-sm icon-btn filter-toggle-button${filterOpen || filterSet ? ' is-active' : ''}`}
-                      onClick={() => toggleColumnFilter(column.key)}
-                      aria-label={`Filter ${column.label.toLowerCase()}`}
-                      aria-expanded={filterOpen}
-                      title="Filter column"
-                    >
-                      <FilterIcon />
-                    </button>
+                    {column.filterable !== false && (
+                      <button
+                        type="button"
+                        className={`btn btn-quiet btn-sm icon-btn filter-toggle-button${filterOpen || filterSet ? ' is-active' : ''}`}
+                        onClick={() => toggleColumnFilter(column.key)}
+                        aria-label={`Filter ${column.label.toLowerCase()}`}
+                        aria-expanded={filterOpen}
+                        title="Filter column"
+                      >
+                        <FilterIcon />
+                      </button>
+                    )}
                   </div>
                   {filterOpen && (
                     <div className="column-filter">

@@ -1,225 +1,174 @@
-import { Browser, BrowserContext, Page } from "playwright";
-import { chromium } from "playwright-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { AxiosInstance } from "axios";
+import moment from "moment";
 import ApiClient from "./ApiClient";
 import { scraperLogger } from "../utils/Logger";
-import moment from "moment";
+import { folderExpireDate, promotionPrice } from "../utils/Promotion";
+import { parseQuantity, Quantity, unitPriceText } from "../utils/Quantity";
+import AhMobileApi, {
+  AhProduct,
+  ahImage,
+  ahProductUrl,
+  REQUEST_DELAY_MS,
+  sleep,
+} from "./ah/AhMobileApi";
 
-chromium.use(StealthPlugin());
+const PAGE_SIZE = 200;
 
-const AH_URL = "https://www.ah.nl/bonus";
-const BONUS_CATEGORIES_MARKER = "bonusCategories";
+// Long-running webshop deals (perfume, gadgets) that are flagged as national
+// bonus but are not part of the weekly bonus.
+const EXCLUDED_SEGMENTS = new Set(["voordeelshop"]);
 
-interface AhMoney {
-  amount: number;
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * Price per item during the bonus. AH sets currentPrice for discounts that
+ * change the shelf price (percentage, "voor 0.99", euro off); for multi-buy
+ * bonuses it leaves it empty and the price per item follows from the label:
+ *
+ *   "3 voor 5.00" -> 1.67           "2e gratis"      -> regular / 2
+ *   "2+1 gratis"  -> regular * 2/3  "2e halve prijs" -> regular * .75
+ *   "per 100 gram voor 2.39" -> 2.39 per 100 g times the pack weight
+ *
+ * Returns null when no price below the regular price can be worked out.
+ */
+export function ahBonusPrice(product: AhProduct, regular: number, quantity: Quantity | null): number | null {
+  const current = product.currentPrice;
+  if (typeof current === "number" && current > 0 && current < regular - 0.001) return round2(current);
+
+  const label = product.discountLabels?.[0];
+  const count = label?.count ?? 0;
+  let price: number | null = null;
+  switch (label?.code) {
+    case "DISCOUNT_X_FOR_Y":
+      if (count > 0 && label.price) price = label.price / count;
+      break;
+    case "DISCOUNT_ONE_FREE":
+      if (count > 1) price = (regular * (count - 1)) / count;
+      break;
+    case "DISCOUNT_X_PLUS_Y_FREE":
+      if (count > 0 && label.freeCount) price = (regular * count) / (count + label.freeCount);
+      break;
+    case "DISCOUNT_ONE_HALF_PRICE":
+      if (count > 1) price = (regular * (count - 0.5)) / count;
+      break;
+    case "DISCOUNT_PERCENTAGE":
+      if (label.percentage) price = regular * (1 - label.percentage / 100);
+      break;
+    case "DISCOUNT_FIXED_PRICE":
+      if (label.price) price = label.price;
+      break;
+    case "DISCOUNT_AMOUNT":
+      if (label.amount) price = regular - label.amount;
+      break;
+    case "DISCOUNT_WEIGHT":
+      // "per 100 GRAM voor 2.39" on a pack of about 120 g.
+      if (label.price && count > 0 && label.unit === "GRAM" && quantity?.unit === "kg") {
+        price = (label.price * quantity.value * 1000) / count;
+      }
+      break;
+  }
+  if (price === null) price = promotionPrice(product.bonusMechanism, regular);
+  if (price === null || !Number.isFinite(price) || price <= 0 || price >= regular - 0.001) return null;
+  return round2(price);
 }
 
-interface AhPromotionLabel {
-  topText: string | null;
-  bottomText: string | null;
-}
+/**
+ * Maps one product with a bonus to a discount; null when it is not part of
+ * the weekly bonus in the stores (online-only, Etos, Gall & Gall, webshop
+ * deals, standing volume discounts), has ended, or has no usable price.
+ */
+export function mapAhDiscount(product: AhProduct, now: Date = new Date()): IProductDiscountDetails | null {
+  if (!product.isBonus || product.promotionType !== "NATIONAL" || !product.title) return null;
+  if (EXCLUDED_SEGMENTS.has((product.bonusSegmentDescription ?? "").trim().toLowerCase())) return null;
+  if (!product.bonusEndDate) return null;
+  const end = moment(product.bonusEndDate, "YYYY-MM-DD").endOf("day");
+  if (!end.isValid() || end.toDate() < now) return null;
 
-interface AhPrice {
-  now: AhMoney | null;
-  was: AhMoney | null;
-}
+  const regular = product.priceBeforeBonus ?? product.currentPrice;
+  if (typeof regular !== "number" || regular <= 0) return null;
 
-interface AhPromotion {
-  id: string;
-  title: string;
-  subtitle: string | null;
-  category: string;
-  periodEnd: string;
-  storeOnly: boolean;
-  promotionLabels: AhPromotionLabel[];
-  extraDescriptions: string[];
-  price: AhPrice | null;
-  /** Promotion images, largest first; not every bonus response carries them. */
-  images?: { url?: string | null; width?: number | null }[] | null;
-}
+  const quantity = parseQuantity(product.salesUnitSize);
+  const discountPrice = ahBonusPrice(product, regular, quantity);
+  if (discountPrice === null) return null;
 
-/** The largest promotion image, if the bonus data has one. */
-export function ahPromotionImage(promo: Pick<AhPromotion, "images">): string | null {
-  const images = (promo.images ?? []).filter((image) => image?.url);
-  images.sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
-  return images[0]?.url ?? null;
-}
+  const specialDiscount = [
+    product.bonusMechanism?.trim(),
+    product.bonusPeriodDescription?.trim(),
+    product.bonusSegmentDescription?.trim(),
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
-interface AhBonusCategory {
-  id: string;
-  title: string;
-  promotions: AhPromotion[];
-}
-
-interface AhBonusCategoriesResponse {
-  data: {
-    bonusCategories: AhBonusCategory[];
+  return {
+    name: product.title.trim(),
+    originalPrice: regular,
+    discountPrice,
+    unitPrice: unitPriceText(discountPrice, quantity),
+    quantity,
+    specialDiscount,
+    category: product.mainCategory?.trim() || "Overig",
+    supermarket: "Albert Heijn",
+    expireDate: end.toISOString(true),
+    productUrl: ahProductUrl(product),
+    externalId: String(product.webshopId),
+    imageUrl: ahImage(product),
+    brand: product.brand?.trim() || null,
   };
 }
 
-// Categories that are not regular AH supermarket promotions
-const EXCLUDED_CATEGORY_IDS = new Set(["AHONLINE", "GALL", "GALLCARD", "ETOS"]);
-
+/**
+ * Albert Heijn's weekly bonus, one discount per product: the AH mobile API
+ * lists every product with a bonus per category, with its regular price,
+ * bonus details and pack size. No browser needed. Products are linked to
+ * their catalog row by webshopId.
+ */
 class AhApiClient extends ApiClient {
   public name = "Albert Heijn";
 
-  private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
-  private page: Page | null = null;
+  private api: AhMobileApi;
 
-  constructor() {
+  constructor(http?: AxiosInstance) {
     super();
+    this.api = new AhMobileApi(http);
     scraperLogger.debug(`Created a '${this.name}' API Client instance.`);
-  }
-
-  private async init(): Promise<void> {
-    this.browser = await chromium.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-      ],
-    });
-    this.context = await this.browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      locale: "nl-NL",
-      timezoneId: "Europe/Amsterdam",
-      extraHTTPHeaders: { "Accept-Language": "nl-NL,nl;q=0.9" },
-    });
-    this.page = await this.context.newPage();
-  }
-
-  private async close(): Promise<void> {
-    await this.browser?.close();
   }
 
   public async fetchDiscounts(): Promise<{
     discounts: IProductDiscountDetails[];
     expireDate: string;
   }> {
-    scraperLogger.info(`Fetching Albert Heijn discounts via intercepted GraphQL response`);
+    scraperLogger.info("Fetching Albert Heijn bonus products via the AH mobile API");
+    await this.api.authenticate();
+    const categories = await this.api.categories();
+    if (categories.length === 0) throw new Error("AH: no product categories returned");
 
-    await this.init();
-    if (!this.page) throw new Error("Page not initialized");
+    const now = new Date();
+    const discounts = new Map<string, IProductDiscountDetails>();
+    let seen = 0;
 
-    let bonusData: AhBonusCategoriesResponse | null = null;
-
-    this.page.on("response", async (resp) => {
-      if (resp.url().includes("/gql") && !bonusData) {
-        try {
-          const text = await resp.text();
-          if (text.includes(BONUS_CATEGORIES_MARKER) && text.length > 50000) {
-            bonusData = JSON.parse(text);
-          }
-        } catch {
-          scraperLogger.warn("Failed to parse AH GraphQL response");
+    for (const category of categories) {
+      let page = 0;
+      let totalPages = 1;
+      while (page < totalPages) {
+        const data = await this.api.searchPage(category.id, page, PAGE_SIZE, true);
+        totalPages = data.page?.totalPages ?? 0;
+        for (const product of data.products ?? []) {
+          seen++;
+          const discount = mapAhDiscount(product, now);
+          if (discount && !discounts.has(discount.externalId!)) discounts.set(discount.externalId!, discount);
         }
+        page++;
+        await sleep(REQUEST_DELAY_MS);
       }
-    });
-
-    scraperLogger.info(`Navigating to ${AH_URL}`);
-    await this.page.goto(AH_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
-
-    try {
-      await this.page.click('[data-testid="accept-cookies"]', { timeout: 8000 });
-      await this.page.waitForTimeout(1000);
-    } catch {
-      scraperLogger.debug("No cookie popup found");
+      scraperLogger.info(`AH bonus: '${category.name}' done, ${discounts.size} bonus products so far`);
     }
 
-    // Wait for the GraphQL response to arrive after page load
-    if (!bonusData) {
-      await this.page.waitForTimeout(6000);
-    }
-
-    await this.close();
-
-    if (!bonusData) {
-      throw new Error("Albert Heijn bonusCategories GraphQL response was not captured");
-    }
-
-    return this.parseBonusData(bonusData);
-  }
-
-  private parseBonusData(bonusData: AhBonusCategoriesResponse): {
-    discounts: IProductDiscountDetails[];
-    expireDate: string;
-  } {
-    const categories = bonusData.data?.bonusCategories ?? [];
-    const discounts: IProductDiscountDetails[] = [];
-    let latestExpireDate = "";
-
-    for (const cat of categories) {
-      if (EXCLUDED_CATEGORY_IDS.has(cat.id)) continue;
-
-      for (const promo of cat.promotions ?? []) {
-        if (promo.storeOnly) continue;
-
-        // Derive discount price from label bottomText (e.g. "voor 2.99" → 2.99, "3 voor 5.00" → 5.00)
-        const discountPrice = this.extractDiscountPrice(promo.promotionLabels);
-
-        // Original price from price.was if available
-        const originalPrice = promo.price?.was?.amount ?? 0;
-
-        // Special discount: combine label texts + extra descriptions
-        const specialDiscount = this.buildSpecialDiscount(promo.promotionLabels, promo.extraDescriptions);
-
-        const expireDate = moment(promo.periodEnd, "YYYY-MM-DD").endOf("day").toISOString(true);
-
-        discounts.push({
-          name: promo.title,
-          originalPrice,
-          discountPrice,
-          unitPrice: null,
-          specialDiscount,
-          category: cat.title,
-          supermarket: this.name,
-          expireDate,
-          productUrl: AH_URL,
-          imageUrl: ahPromotionImage(promo),
-        });
-
-        if (!latestExpireDate || expireDate > latestExpireDate) {
-          latestExpireDate = expireDate;
-        }
-      }
-    }
-
+    const result = Array.from(discounts.values());
+    const expireDate = folderExpireDate(result);
     scraperLogger.info(
-      `Total Albert Heijn discounts: ${discounts.length}, expire: ${latestExpireDate}`
+      `Total Albert Heijn bonus products: ${result.length} of ${seen} with any bonus, expire: ${expireDate}`
     );
-
-    return { discounts, expireDate: latestExpireDate };
-  }
-
-  private extractDiscountPrice(labels: AhPromotionLabel[]): number {
-    if (!labels?.length) return 0;
-    // Use the first label's bottomText — it's the price/discount value
-    // Patterns: "2.99", "5.00", "50%", "1+1", etc.
-    const bottom = labels[0].bottomText ?? "";
-    const match = bottom.match(/(\d+[.,]\d+)/);
-    if (match) return parseFloat(match[1].replace(",", "."));
-    return 0;
-  }
-
-  private buildSpecialDiscount(labels: AhPromotionLabel[], extra: string[]): string {
-    const labelParts = (labels ?? [])
-      .map((l) => [l.topText, l.bottomText].filter(Boolean).join(" "))
-      .filter(Boolean);
-
-    const allParts = [...labelParts, ...(extra ?? [])];
-    // Deduplicate case-insensitively
-    const seen = new Set<string>();
-    const unique = allParts.filter((p) => {
-      const key = p.toLowerCase().replace(/\s+/g, " ").trim();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    return unique.join(" | ").trim();
+    return { discounts: result, expireDate };
   }
 }
 

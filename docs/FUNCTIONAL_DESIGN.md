@@ -626,7 +626,7 @@ flowchart TD
 
 | ID        | Requirement                                                                  | Priority | Status         |
 | --------- | ---------------------------------------------------------------------------- | -------- | -------------- |
-| FR-001.1  | System SHALL scrape discount data from Albert Heijn website                  | HIGH     | ✅ Implemented |
+| FR-001.1  | System SHALL scrape discount data from Albert Heijn: one discount per product (not per promotion group such as "Alle Felix"), from the AH mobile API product search with the bonus filter, per top-level category. Only the weekly store bonus (`promotionType` NATIONAL) is kept; online-only, Etos, Gall & Gall, the long-running "Voordeelshop" and standing volume discounts are skipped. Each discount has the regular price, the bonus price per item (multi-buy labels worked out per item), the pack size and price per unit, its own end date, the group name in the special discount text, and `externalId` = webshopId | HIGH     | ✅ Implemented |
 | FR-001.2  | System SHALL scrape discount data from Dirk website                          | HIGH     | ✅ Implemented |
 | FR-001.3  | System SHALL scrape discount data from PLUS website                          | HIGH     | ✅ Implemented |
 | FR-001.4  | System SHALL handle cookie consent popups automatically                      | HIGH     | ✅ Implemented |
@@ -700,7 +700,7 @@ flowchart TD
 | FR-007.10 | System SHALL store each catalog product's pack quantity normalised to kg, l or stuk (`quantity_value`, `quantity_unit`; supplied by the client or read from the pack size such as "500 g", "6 x 330 ml", "4 stuks") and expose `pricePerUnit` (current price / quantity) in the public API | HIGH | ✅ Implemented |
 | FR-007.12 | System SHALL store an offer's pack quantity (kg, l or stuk) on its product when the catalog does not keep that product, so offers get a `pricePerUnit` too: from the client (`quantity`: Jumbo pack size, Hoogvliet sub title, Lidl's pack size under the price such as "400 g" or "6x500 ml", else its key facts or title) or else read from the offer name ("Spekreepjes 2x190 g"). A catalog product keeps the catalog's quantity | HIGH | ✅ Implemented |
 | FR-007.13 | System SHALL store only food and drink from Aldi: no clothing, home goods, tools, plants, toys, drugstore, household or pet products, in the catalog and in the offers | HIGH | ✅ Implemented |
-| FR-007.11 | System SHALL link offers to products on the supermarket's own product id when the scraper provides one (`externalId`), so products sharing a name stay separate and offers land on the catalog row; without an id, offers are linked by name | HIGH | ✅ Aldi, Dirk, Hoogvliet, Jumbo, PLUS, Lidl (by the permanent article number, FR-007.14; AH offers still by name) |
+| FR-007.11 | System SHALL link offers to products on the supermarket's own product id when the scraper provides one (`externalId`), so products sharing a name stay separate and offers land on the catalog row; without an id, offers are linked by name | HIGH | ✅ AH, Aldi, Dirk, Hoogvliet, Jumbo, PLUS, Lidl (by the permanent article number, FR-007.14) |
 
 **Jumbo catalog and offers.** Both use jumbo.com's own GraphQL API
 (`POST https://www.jumbo.com/api/graphql`) with the web client's headers
@@ -910,8 +910,7 @@ Per supermarket the cheapest same product (current price) is used.
 
 **Images.** Every catalog client and every discount client stores the
 supermarket's image URL (`products.image_url`); an offer only fills an empty
-image, the catalog image wins. AH offers carry an image only when the bonus
-data has one. The image proxy fetches an image on first request (browser user
+image, the catalog image wins. The image proxy fetches an image on first request (browser user
 agent, 15 s timeout, at most 5 MB, only `image/*`), stores it on disk in
 `IMAGE_CACHE_DIR` (default: the container's temp directory) under the product
 id plus a hash of the URL, and serves it with `Cache-Control: public,
@@ -941,6 +940,7 @@ the product has no image or the supermarket does not serve it.
 | FR-005.17 | System SHALL offer a system, light and dark theme, remembered per browser, applied before the first paint so dark mode never flashes white | LOW | ✅ Implemented |
 | FR-005.18 | System SHALL show skeletons while loading, and an empty or error state that says what happened and what to do next (with "Try again" on errors) | LOW | ✅ Implemented |
 | FR-005.19 | System SHALL show failed actions (offers run, schedule toggle, catalog start) as an inline error alert on the page instead of a browser popup | LOW | ✅ Implemented |
+| FR-005.20 | System SHALL show the pack size under the product name and the discount price per kilo, liter or piece in its own column (from the product's `quantity_value`/`quantity_unit`; "—" without a known quantity) | MEDIUM | ✅ Implemented |
 
 #### FR-006: Monitoring & Logging
 

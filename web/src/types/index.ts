@@ -7,6 +7,11 @@ export interface Product {
   /** Image at the supermarket; shown through the API's image proxy. */
   image_url?: string | null;
   brand?: string | null;
+  /** Pack size as the supermarket writes it ("6 x 48 g"), when known. */
+  unit_size?: string | null;
+  /** Pack quantity in quantity_unit (0.288 for 288 g), for the price per unit. */
+  quantity_value?: number | null;
+  quantity_unit?: 'kg' | 'l' | 'stuk' | null;
   created_at: string;
   updated_at: string;
 }
