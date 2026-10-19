@@ -1,72 +1,26 @@
 .search-bar {
-  margin-bottom: 8px;
-}
-
-.search-input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
   width: 100%;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  color: var(--notion-text-secondary);
-  pointer-events: none;
+  max-width: 480px;
 }
 
 .search-input {
-  width: 100%;
-  padding: 10px 36px 10px 36px;
-  font-size: 15px;
-  line-height: 20px;
-  color: var(--notion-text);
-  background: var(--notion-surface);
-  border: 1px solid var(--notion-border);
-  border-radius: 6px;
-  outline: none;
-  transition: all 0.2s;
-  font-family: inherit;
+  padding-right: 44px;
+}
+
+/* Hide the browser's own clear button; the app has one. */
+.search-input::-webkit-search-cancel-button {
   -webkit-appearance: none;
 }
 
-.search-input::placeholder {
-  color: var(--notion-text-secondary);
-}
-
-.search-input:focus {
-  border-color: var(--notion-accent);
-  box-shadow: 0 0 0 2px var(--notion-accent-light);
-}
-
-.clear-button {
+.search-bar .search-clear {
   position: absolute;
-  right: 8px;
-  padding: 6px;
-  background: transparent;
-  border: none;
-  color: var(--notion-text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s;
+  right: 4px;
 }
 
-.clear-button:hover {
-  background: var(--notion-hover);
-  color: var(--notion-text);
-}
-
-.clear-button:active {
-  background: var(--notion-selected);
-}
-
-@media (max-width: 480px) {
-  .search-input {
-    font-size: 16px; /* prevent iOS zoom on focus */
-    padding: 12px 40px 12px 38px;
-  }
+/* .input-wrap positions every svg on the left; the clear icon stays in its button. */
+.search-bar .search-clear svg {
+  position: static;
+  width: 16px;
+  height: 16px;
+  color: inherit;
 }

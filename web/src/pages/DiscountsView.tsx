@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ProductWithDiscount } from '../types';
 import DatabaseTable from '../components/DatabaseTable';
 import SearchBar from '../components/SearchBar';
+import { ErrorState } from '../components/PageState';
 import { discountService } from '../services/api';
 import './DiscountsView.css';
 
@@ -29,7 +30,7 @@ const DiscountsView: React.FC = () => {
       const discounts = await discountService.getAllDiscounts();
       setData(discounts);
     } catch (err) {
-      setError('Failed to load discounts. Please try again.');
+      setError('Failed to load discounts.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -115,42 +116,45 @@ const DiscountsView: React.FC = () => {
     });
   };
 
+  const hasColumnFilters = Object.values(columnFilters).some(Boolean);
+
   return (
     <div className="discounts-view">
-      <div className="discounts-header">
-        <h1 className="discounts-title">Discount Database</h1>
-        <div className="discounts-subtitle">
-          {filteredData.length} {filteredData.length === 1 ? 'item' : 'items'}
+      <header className="page-header">
+        <div className="page-header-text">
+          <h1 className="t-title">Discount database</h1>
+          <p className="t-small">
+            {loading
+              ? 'Loading current discounts…'
+              : `${filteredData.length} ${filteredData.length === 1 ? 'item' : 'items'}`}
+          </p>
         </div>
-      </div>
-
-      <div className="discounts-toolbar">
         <SearchBar
           value={globalSearch}
           onChange={setGlobalSearch}
           onClear={handleClearAllFilters}
-          placeholder="Search in all columns..."
+          hasFilters={hasColumnFilters}
+          placeholder="Search in all columns…"
         />
-      </div>
+      </header>
 
-      <div className="discounts-content">
-        {loading ? (
-          <div className="discounts-loading">
-            <div className="loading-spinner"></div>
-            <p>Loading discounts...</p>
-          </div>
-        ) : error ? (
-          <div className="discounts-error">
-            <p>{error}</p>
-            <button onClick={loadData} className="retry-button">
-              Retry
+      <div className="card discounts-content">
+        {error ? (
+          <ErrorState
+            title="Couldn't load discounts"
+            message="The scraper API did not answer. The stored discounts are safe; try again in a moment."
+          >
+            <button type="button" onClick={loadData} className="btn btn-primary">
+              Try again
             </button>
-          </div>
+          </ErrorState>
         ) : (
           <DatabaseTable
             data={filteredData}
+            loading={loading}
             columnFilters={columnFilters}
             onColumnFilterChange={handleColumnFilterChange}
+            onClearFilters={handleClearAllFilters}
           />
         )}
       </div>

@@ -94,7 +94,7 @@ reads the API as `supermarket-scraper-api` (acc: `supermarket-scraper-acc-api`).
 - ✅ **Product Catalog**
 
   - Weekly full assortment scrape with regular prices for all seven supermarkets (Albert Heijn, Aldi, Dirk, Hoogvliet, Jumbo, Lidl food assortment, PLUS)
-  - Price history and catalog run tracking; on-demand runs from the "Full Assortment" section of the admin UI ("Run Catalog")
+  - Price history and catalog run tracking; on-demand runs from the "Full assortment" section of the admin UI ("Run catalog")
 
 - ✅ **Public Consumer API**
 
@@ -103,7 +103,8 @@ reads the API as `supermarket-scraper-api` (acc: `supermarket-scraper-acc-api`).
 
 - ✅ **Web Interface**
 
-  - Notion-inspired UI design
+  - shelly-nas house style (design guidelines from `shelly-nas/shelly-fundamentals`), light and dark mode
+  - App shell with a sidebar on desktop and a top bar with a menu drawer on phones
   - Database view with sortable columns
   - Global and per-column search
   - Discount filtering (date, category, price)
@@ -413,7 +414,7 @@ sequenceDiagram
     participant External as Supermarket Website
     participant DB as Database
 
-    Admin->>Web: Click "Run Offers" for Albert Heijn (Weekly Offers section)
+    Admin->>Web: Click "Run offers" for Albert Heijn (Weekly offers section)
     Web->>Admin: Show confirmation dialog
     Admin->>Web: Confirm
     Web->>API: POST /api/scraper/run/albert-heijn
@@ -457,7 +458,7 @@ sequenceDiagram
 **Main Flow:**
 
 1. Administrator navigates to Configurations page
-2. Administrator clicks "Run Offers" for the desired supermarket in the Weekly Offers section
+2. Administrator clicks "Run offers" for the desired supermarket in the Weekly offers section
 3. System displays confirmation dialog
 4. Administrator confirms action
 5. System creates scraper_run record with "running" status
@@ -930,13 +931,16 @@ the product has no image or the supermarket does not serve it.
 | FR-005.7  | System SHALL display default sorting by expiration, category, name | MEDIUM   | ✅ Implemented |
 | FR-005.8  | System SHALL provide Configurations dashboard                      | MEDIUM   | ✅ Implemented |
 | FR-005.9  | System SHALL display KPIs (runs, success rate, products)           | MEDIUM   | ✅ Implemented |
-| FR-005.10 | System SHALL provide manual scraper trigger buttons in two sections: "Weekly Offers" (current discounts, "Run Offers") and "Full Assortment" (catalog at regular price, "Run Catalog") | MEDIUM | ✅ Implemented |
+| FR-005.10 | System SHALL provide manual scraper trigger buttons in two sections: "Weekly offers" (current discounts, "Run offers", with an "Auto re-scrape" switch) and "Full assortment" (catalog at regular price, "Run catalog") | MEDIUM | ✅ Implemented |
 | FR-005.11 | System SHALL display scraper run logs with pagination              | MEDIUM   | ✅ Implemented |
-| FR-005.12 | System SHALL use Notion-inspired design aesthetics                 | LOW      | ✅ Implemented |
+| FR-005.12 | System SHALL follow the shelly-nas design guidelines (`shelly-fundamentals`, skill `design-richtlijnen`): Figtree, color roles from `tokens.css`, components from `components.css`, status as dot plus word | LOW | ✅ Implemented |
 | FR-005.13 | System SHALL be responsive for mobile devices                      | LOW      | ✅ Implemented |
 | FR-005.14 | System SHALL provide confirmation dialog before running scrapers   | MEDIUM   | ✅ Implemented |
 | FR-005.15 | System SHALL display an external link icon next to product names that opens the supermarket offer page | LOW | ✅ Implemented |
 | FR-005.16 | System SHALL show a product thumbnail (through the image proxy) next to product names, with a placeholder icon when there is no image | LOW | ✅ Implemented |
+| FR-005.17 | System SHALL offer a system, light and dark theme, remembered per browser, applied before the first paint so dark mode never flashes white | LOW | ✅ Implemented |
+| FR-005.18 | System SHALL show skeletons while loading, and an empty or error state that says what happened and what to do next (with "Try again" on errors) | LOW | ✅ Implemented |
+| FR-005.19 | System SHALL show failed actions (offers run, schedule toggle, catalog start) as an inline error alert on the page instead of a browser popup | LOW | ✅ Implemented |
 
 #### FR-006: Monitoring & Logging
 

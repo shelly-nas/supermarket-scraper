@@ -1,109 +1,54 @@
-.confirm-dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.2s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 .confirm-dialog {
-  background: var(--notion-surface);
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  max-width: 500px;
-  width: 90%;
-  animation: slideUp 0.2s ease-out;
+  width: min(480px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text-body);
+  box-shadow: var(--shadow-2);
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+.theme-dark .confirm-dialog {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 
-.confirm-dialog-header {
-  padding: 24px 24px 16px;
-  border-bottom: 1px solid var(--notion-border);
+.confirm-dialog[open] {
+  animation: dialog-in .24s var(--ease-out);
 }
 
-.confirm-dialog-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--notion-text);
+.confirm-dialog::backdrop {
+  background: rgba(18, 22, 28, .48);
 }
 
-.confirm-dialog-body {
-  padding: 24px;
-}
-
-.confirm-dialog-body p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--notion-text);
+.confirm-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-6);
 }
 
 .confirm-dialog-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--notion-border);
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
 }
 
-.confirm-button-cancel,
-.confirm-button-confirm {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.confirm-button-cancel {
-  background: transparent;
-  color: var(--notion-text);
-  border: 1px solid var(--notion-border);
-}
-
-.confirm-button-cancel:hover {
-  background: var(--notion-hover);
-}
-
-.confirm-button-confirm {
-  background: var(--notion-accent);
-  color: white;
-}
-
-.confirm-button-confirm:hover {
-  background: var(--notion-accent-hover);
-}
-
-.confirm-button-cancel:focus,
-.confirm-button-confirm:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--notion-accent-light);
+@media (prefers-reduced-motion: reduce) {
+  .confirm-dialog[open] {
+    animation: none;
+  }
 }
