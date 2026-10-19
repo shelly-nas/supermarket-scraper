@@ -2,7 +2,7 @@ import { Request, Response, Router } from "express";
 import { serverLogger, scraperLogger } from "../utils/Logger";
 import PostgresDataManager from "../data/PostgresDataManager";
 import { getSupermarketClient } from "../utils/ConfigHelper";
-import { nextRunAfterExpiry } from "../utils/Schedule";
+import { nextRunAfterExpiry, TIME_ZONE } from "../utils/Schedule";
 
 const router = Router();
 
@@ -56,9 +56,16 @@ router.get("/dashboard/stats", async (req: Request, res: Response) => {
       const earliestRun = scheduledRuns.reduce((earliest, current) =>
         current.nextRunAt < earliest.nextRunAt ? current : earliest
       );
-      nextScheduledRun = `${
-        earliestRun.supermarket
-      } at ${earliestRun.nextRunAt.toLocaleString()}`;
+      // In Dutch time: the container runs in UTC.
+      const when = earliestRun.nextRunAt.toLocaleString("nl-NL", {
+        timeZone: TIME_ZONE,
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      nextScheduledRun = `${earliestRun.supermarket}, ${when}`;
     }
 
     const stats = {

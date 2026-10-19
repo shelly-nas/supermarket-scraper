@@ -1,10 +1,12 @@
 /**
  * When the next weekly run of a supermarket (catalog, then offers) is due.
  *
- * Each supermarket has its own offers week (AH Monday to Sunday, others
- * Wednesday to Tuesday), so the run follows the end date of its offers: the
- * day after, at 03:00 Dutch time. Not at midnight, so the supermarket has
- * published its new week. Fallbacks keep a missed or odd date from stalling
+ * Each supermarket has its own offers week (AH, Lidl and Aldi Monday to
+ * Sunday; Jumbo, Dirk and Hoogvliet Wednesday to Tuesday), so the run follows
+ * the end of its offers: the first 03:00 Dutch time after it. Not at
+ * midnight, so the supermarket has published its new week. "First 03:00
+ * after" rather than "the next day" also copes with end times in another
+ * time zone (Dirk sends 23:59 UTC, which is already 01:59 the next day). Fallbacks keep a missed or odd date from stalling
  * the data:
  *
  * - no end date, or one that has already passed (the site still showed the
@@ -73,7 +75,8 @@ export function nextRunAfterExpiry(
   const retry = { at: new Date(now.getTime() + RETRY_HOURS * HOUR_MS), reason: "retry" as const };
   if (!expireDate || Number.isNaN(expireDate.getTime())) return retry;
 
-  const atExpiry = localTimeOn(expireDate, 1, RUN_HOUR);
+  let atExpiry = localTimeOn(expireDate, 0, RUN_HOUR);
+  if (atExpiry <= expireDate) atExpiry = localTimeOn(expireDate, 1, RUN_HOUR);
   if (atExpiry <= now) return retry;
 
   const latest = localTimeOn(now, MAX_DAYS_BETWEEN_RUNS, RUN_HOUR);

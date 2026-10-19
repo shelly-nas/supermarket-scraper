@@ -28,6 +28,13 @@ describe("next run after an offers run", () => {
     expect(nextRunAfterExpiry(at("2026-10-20T21:59:59.999Z"), now).at).toEqual(at("2026-10-21T01:00:00.000Z"));
   });
 
+  it("runs at the first 03:00 after an end time in UTC", () => {
+    // Dirk: Tuesday 23:59 UTC is Wednesday 01:59 in Amsterdam -> Wednesday 03:00, not Thursday.
+    expect(nextRunAfterExpiry(at("2026-10-20T23:59:00.000Z"), now).at).toEqual(at("2026-10-21T01:00:00.000Z"));
+    // Hoogvliet: Tuesday 21:59 local.
+    expect(nextRunAfterExpiry(at("2026-10-20T19:59:00.000Z"), now).at).toEqual(at("2026-10-21T01:00:00.000Z"));
+  });
+
   it("retries in 3 hours without an end date or when it has already passed", () => {
     expect(nextRunAfterExpiry(null, now)).toEqual({ at: at("2026-10-20T11:00:00Z"), reason: "retry" });
     expect(nextRunAfterExpiry(at("invalid"), now).reason).toBe("retry");

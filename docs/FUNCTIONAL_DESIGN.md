@@ -330,7 +330,7 @@ I want scrapers to run automatically based on promotion schedules
 So that data stays fresh without manual intervention
 
 Acceptance Criteria:
-- Scrapers schedule next run based on promotion expiry (the day after, at 03:00), catalog first
+- Scrapers schedule next run based on promotion expiry (the first 03:00 after it), catalog first
 - Scheduler checks every minute for due runs
 - Failed runs don't block future schedules
 - Logging of all automated runs
@@ -660,7 +660,7 @@ flowchart TD
 | ID       | Requirement                                                            | Priority | Status         |
 | -------- | ---------------------------------------------------------------------- | -------- | -------------- |
 | FR-003.1 | System SHALL check for due scraper runs every minute                   | HIGH     | ✅ Implemented |
-| FR-003.2 | System SHALL schedule the next run the day after the offers end (the run's expiry, FR-001.5) at 03:00 Europe/Amsterdam, not at midnight, so the supermarket has published its new week | HIGH     | ✅ Implemented |
+| FR-003.2 | System SHALL schedule the next run at the first 03:00 Europe/Amsterdam after the offers end (the run's expiry, FR-001.5), not at midnight, so the supermarket has published its new week. Measured in October 2026: AH, Lidl and Aldi end on Sunday (run Monday 03:00), Jumbo, Dirk and Hoogvliet on Tuesday (run Wednesday 03:00); Dirk's end time in UTC (23:59Z = 01:59 local) still gives Wednesday 03:00 | HIGH     | ✅ Implemented |
 | FR-003.3 | System SHALL support enable/disable toggle per supermarket             | MEDIUM   | ✅ Implemented |
 | FR-003.4 | System SHALL NOT run multiple instances of same scraper concurrently   | HIGH     | ✅ Implemented |
 | FR-003.5 | System SHALL deactivate expired discounts on each scheduler check      | HIGH     | ✅ Implemented |

@@ -265,8 +265,8 @@ const Configurations: React.FC = () => {
         <div className="section-header">
           <h2 className="t-heading">Weekly offers</h2>
           <p className="t-small">
-            Current discounts. The weekly auto run starts the day after they end, at 03:00: the
-            catalog first, then the new offers
+            Current discounts. The weekly auto run starts at 03:00 after they end: the catalog
+            first, then the new offers
           </p>
         </div>
         <div className="supermarket-grid">
