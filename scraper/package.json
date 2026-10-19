@@ -26,6 +26,9 @@
     "@typescript-eslint/parser": "^7.1.0",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.33.2",
+    "playwright": "^1.56.1",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
     "vitest": "^3.2.4"
@@ -43,10 +46,7 @@
     "ollama": "^0.5.0",
     "openai": "^4.38.3",
     "pg": "^8.11.3",
-    "playwright": "^1.56.1",
-    "playwright-extra": "^4.3.6",
     "proper-lockfile": "^4.1.2",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "utf7": "^1.0.1"
   }
 }
