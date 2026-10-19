@@ -53,6 +53,8 @@ export interface SupermarketStatus {
   productsScraped?: number;
   promotionExpireDate?: string | null;
   scheduledEnabled?: boolean;
+  /** When the next weekly run (catalog, then offers) is due. */
+  nextRunAt?: string | null;
 }
 
 export interface ScraperRun {

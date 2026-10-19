@@ -330,7 +330,7 @@ I want scrapers to run automatically based on promotion schedules
 So that data stays fresh without manual intervention
 
 Acceptance Criteria:
-- Scrapers schedule next run based on promotion expiry
+- Scrapers schedule next run based on promotion expiry (the day after, at 03:00), catalog first
 - Scheduler checks every minute for due runs
 - Failed runs don't block future schedules
 - Logging of all automated runs
@@ -541,9 +541,10 @@ sequenceDiagram
 3. System deactivates discounts where expire_date < NOW()
 4. Scheduler queries scheduled_runs table for due runs
 5. For each due run:
-   - Scheduler triggers scraper via internal API
-   - Scraper executes asynchronously
-   - Scraper completes and updates next_run_at
+   - Scheduler sets next_run_at to a retry 3 hours later (fallback)
+   - Scheduler runs the supermarket's catalog scrape and waits for it
+   - Scheduler triggers the offers scraper via internal API
+   - Scraper completes and sets next_run_at from the offers' end date (FR-003.2, FR-003.10)
 6. Scheduler logs completion and waits for next cycle
 
 **Postconditions:**
@@ -557,7 +558,9 @@ sequenceDiagram
 
 - **4a**: No due runs → Log "No due runs", wait for next cycle
 - **5a**: API call fails → Log error, continue with other scrapers
-- **5b**: Scraper already running → Skip this run
+- **5b**: Weekly run still in progress → Skip, check again at the retry time
+- **5c**: Catalog run fails → Log error, continue with the offers run
+- **5d**: Offers run fails → next_run_at stays at the retry 3 hours later
 
 #### Use Case 4: Search and Filter Discounts
 
@@ -657,13 +660,16 @@ flowchart TD
 | ID       | Requirement                                                            | Priority | Status         |
 | -------- | ---------------------------------------------------------------------- | -------- | -------------- |
 | FR-003.1 | System SHALL check for due scraper runs every minute                   | HIGH     | ✅ Implemented |
-| FR-003.2 | System SHALL automatically schedule next run based on promotion expiry | HIGH     | ✅ Implemented |
+| FR-003.2 | System SHALL schedule the next run the day after the offers end (the run's expiry, FR-001.5) at 03:00 Europe/Amsterdam, not at midnight, so the supermarket has published its new week | HIGH     | ✅ Implemented |
 | FR-003.3 | System SHALL support enable/disable toggle per supermarket             | MEDIUM   | ✅ Implemented |
 | FR-003.4 | System SHALL NOT run multiple instances of same scraper concurrently   | HIGH     | ✅ Implemented |
 | FR-003.5 | System SHALL deactivate expired discounts on each scheduler check      | HIGH     | ✅ Implemented |
 | FR-003.6 | System SHALL log all scheduler activities                              | MEDIUM   | ✅ Implemented |
 | FR-003.7 | System SHALL persist scheduled run state across restarts               | MEDIUM   | ✅ Implemented |
 | FR-003.8 | System SHALL trigger scrapers via internal API calls                   | MEDIUM   | ✅ Implemented |
+| FR-003.9 | System SHALL run each supermarket's weekly auto run as catalog first, then offers, so regular prices and offers change on the supermarket's own week (AH Monday to Sunday, others their own); a failed catalog run does not stop the offers run | HIGH | ✅ Implemented |
+| FR-003.10 | System SHALL fall back when a date is missed: (a) while a run is in progress the next run is set to a retry 3 hours later, replaced by a successful offers run, so a failed or hanging run is retried; (b) offers without an end date, or whose end date has already passed (the site still showed the old week), are fetched again 3 hours later; (c) runs are never more than 7 days apart, also when the end date is further away; (d) a run that was due while the server was down starts on the next check | HIGH | ✅ Implemented |
+| FR-003.11 | System SHALL keep the per-supermarket enabled setting when a run updates the schedule, so a manual run does not switch the automatic runs back on | MEDIUM | ✅ Implemented |
 
 #### FR-004: REST API
 
@@ -693,7 +699,7 @@ flowchart TD
 | FR-007.2 | System SHALL store the supermarket product id, brand, pack size, unit price, image and regular price   | HIGH     | ✅ Implemented |
 | FR-007.3 | System SHALL record a price history row only when a regular price changes                             | MEDIUM   | ✅ Implemented |
 | FR-007.4 | System SHALL mark products missing from a run as not in the catalog, unless the run saw under 50% of the known products | MEDIUM | ✅ Implemented |
-| FR-007.5 | System SHALL run catalog scrapes weekly (`CATALOG_CRON`, default Monday 03:17; `CATALOG_ENABLED=false` disables) and on demand from the admin UI | MEDIUM | ✅ Implemented |
+| FR-007.5 | System SHALL run each supermarket's catalog scrape in its weekly auto run, right before its offers run (FR-003.9), and on demand from the admin UI; `CATALOG_ENABLED=false` leaves the catalog step out | MEDIUM | ✅ Implemented |
 | FR-007.6 | System SHALL track every catalog run (status, counts, duration, error) in `catalog_runs`             | MEDIUM   | ✅ Implemented |
 | FR-007.7 | System SHALL apply schema migrations from `scraper/migrations` on startup                              | HIGH     | ✅ Implemented |
 | FR-007.8 | Catalog clients for Dirk, PLUS and Aldi                                                                | MEDIUM   | ✅ Implemented |
