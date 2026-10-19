@@ -64,7 +64,19 @@
 }
 
 .product-name {
+  display: flex;
+  flex-direction: column;
   color: var(--text);
+}
+
+.product-pack {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.unit-label {
+  color: var(--text-muted);
 }
 
 .product-thumb {

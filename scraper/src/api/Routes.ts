@@ -197,6 +197,9 @@ router.get("/discounts", async (req: Request, res: Response) => {
         p.product_url,
         p.image_url,
         p.brand,
+        p.unit_size,
+        p.quantity_value::float AS quantity_value,
+        p.quantity_unit,
         p.created_at,
         p.updated_at,
         json_build_object(
