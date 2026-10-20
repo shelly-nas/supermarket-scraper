@@ -104,9 +104,8 @@ async function startServer() {
 
     // Start the scheduler service
     const dataManager = new PostgresDataManager();
-    const scheduler = new SchedulerService(dataManager, PORT.toString());
+    const scheduler = new SchedulerService(dataManager, PORT.toString(), catalogService);
     scheduler.start();
-    scheduler.startCatalogSchedule(catalogService);
     serverLogger.info("Automated scheduler service initialized");
   });
 }

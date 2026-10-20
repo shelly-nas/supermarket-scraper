@@ -26,7 +26,6 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       CATALOG_ENABLED: ${CATALOG_ENABLED:-true}
-      CATALOG_CRON: ${CATALOG_CRON:-17 3 * * 1}
     ports:
       - "3001:3001"
     depends_on:

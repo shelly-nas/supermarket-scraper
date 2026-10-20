@@ -63,8 +63,7 @@ reads the API as `supermarket-scraper-api` (acc: `supermarket-scraper-acc-api`).
 - ✅ **Web Scraping Engine**
 
   - Automated discount data collection from Albert Heijn, Dirk, and PLUS
-  - Playwright-based browser automation
-  - Cookie consent handling
+  - Plain HTTP against each supermarket's own API or site data, no browser
   - Product categorization
   - Promotion expiration date extraction
 
@@ -195,7 +194,7 @@ graph TB
 | **Web Server**       | Nginx                   | Latest  |
 | **Backend**          | Node.js + Express       | Latest  |
 | **Language**         | TypeScript              | Latest  |
-| **Web Scraping**     | Playwright              | Latest  |
+| **Web Scraping**     | axios (HTTP), no browser | Latest  |
 | **Database**         | PostgreSQL              | 15+     |
 | **Scheduling**       | node-cron               | Latest  |
 | **Containerization** | Docker + Docker Compose | Latest  |
@@ -330,7 +329,7 @@ I want scrapers to run automatically based on promotion schedules
 So that data stays fresh without manual intervention
 
 Acceptance Criteria:
-- Scrapers schedule next run based on promotion expiry
+- Scrapers schedule next run based on promotion expiry (the first 03:00 after it), catalog first
 - Scheduler checks every minute for due runs
 - Failed runs don't block future schedules
 - Logging of all automated runs
@@ -462,9 +461,9 @@ sequenceDiagram
 3. System displays confirmation dialog
 4. Administrator confirms action
 5. System creates scraper_run record with "running" status
-6. Scraper initializes Playwright browser
-7. Scraper navigates to supermarket website
-8. Scraper handles cookie consent popup
+6. Scraper calls the supermarket's API or site data over HTTP
+7. Scraper retries rate limits and server errors
+8. Scraper skips products outside the weekly offers
 9. Scraper extracts promotion expiration date
 10. For each product category:
     - Scraper finds discount products
@@ -487,7 +486,7 @@ sequenceDiagram
 
 **Alternative Flows:**
 
-- **6a**: Browser initialization fails → Log error, update run status to "failed"
+- **6a**: Supermarket API unreachable → Log error, update run status to "failed"
 - **7a**: Website unreachable → Timeout, mark run as "failed"
 - **8a**: Cookie popup not found → Log warning, continue
 - **10a**: No products found → Log warning, complete with 0 products
@@ -541,9 +540,10 @@ sequenceDiagram
 3. System deactivates discounts where expire_date < NOW()
 4. Scheduler queries scheduled_runs table for due runs
 5. For each due run:
-   - Scheduler triggers scraper via internal API
-   - Scraper executes asynchronously
-   - Scraper completes and updates next_run_at
+   - Scheduler sets next_run_at to a retry 3 hours later (fallback)
+   - Scheduler runs the supermarket's catalog scrape and waits for it
+   - Scheduler triggers the offers scraper via internal API
+   - Scraper completes and sets next_run_at from the offers' end date (FR-003.2, FR-003.10)
 6. Scheduler logs completion and waits for next cycle
 
 **Postconditions:**
@@ -557,7 +557,9 @@ sequenceDiagram
 
 - **4a**: No due runs → Log "No due runs", wait for next cycle
 - **5a**: API call fails → Log error, continue with other scrapers
-- **5b**: Scraper already running → Skip this run
+- **5b**: Weekly run still in progress → Skip, check again at the retry time
+- **5c**: Catalog run fails → Log error, continue with the offers run
+- **5d**: Offers run fails → next_run_at stays at the retry 3 hours later
 
 #### Use Case 4: Search and Filter Discounts
 
@@ -629,10 +631,10 @@ flowchart TD
 | FR-001.1  | System SHALL scrape discount data from Albert Heijn: one discount per product (not per promotion group such as "Alle Felix"), from the AH mobile API product search with the bonus filter, per top-level category. Only the weekly store bonus (`promotionType` NATIONAL) is kept; online-only, Etos, Gall & Gall, the long-running "Voordeelshop" and standing volume discounts are skipped. Each discount has the regular price, the bonus price per item (multi-buy labels worked out per item), the pack size and price per unit, its own end date, the group name in the special discount text, and `externalId` = webshopId | HIGH     | ✅ Implemented |
 | FR-001.2  | System SHALL scrape discount data from Dirk website                          | HIGH     | ✅ Implemented |
 | FR-001.3  | System SHALL scrape discount data from PLUS website                          | HIGH     | ✅ Implemented |
-| FR-001.4  | System SHALL handle cookie consent popups automatically                      | HIGH     | ✅ Implemented |
+| FR-001.4  | System SHALL handle cookie consent popups automatically                      | HIGH     | ➖ Obsolete: no scraper uses a browser any more |
 | FR-001.5  | System SHALL extract promotion expiration dates per offer; the run's expiry (which schedules the next run) is the weekly folder's end date, i.e. the most common end date, so long-running promotions do not postpone the next run. Lidl reads each tile's own end date (`storeEndDate`) from the offers page | HIGH     | ✅ Implemented |
 | FR-001.6  | System SHALL extract product names, categories, prices, discount details, and product URLs | HIGH     | ✅ Implemented |
-| FR-001.7  | System SHALL use Playwright for browser automation                           | HIGH     | ✅ Implemented |
+| FR-001.7  | System SHALL read every supermarket over plain HTTP, without a browser (AH mobile API, Jumbo/Dirk/Hoogvliet GraphQL, Aldi Algolia, Lidl and PLUS site data); the API image has no browser | HIGH     | ✅ Implemented |
 | FR-001.8  | System SHALL support configurable web identifiers per supermarket            | MEDIUM   | ✅ Implemented |
 | FR-001.9  | System SHALL log all scraping activities with timestamps                     | MEDIUM   | ✅ Implemented |
 | FR-001.10 | System SHALL handle network timeouts gracefully                              | MEDIUM   | ✅ Implemented |
@@ -657,13 +659,16 @@ flowchart TD
 | ID       | Requirement                                                            | Priority | Status         |
 | -------- | ---------------------------------------------------------------------- | -------- | -------------- |
 | FR-003.1 | System SHALL check for due scraper runs every minute                   | HIGH     | ✅ Implemented |
-| FR-003.2 | System SHALL automatically schedule next run based on promotion expiry | HIGH     | ✅ Implemented |
+| FR-003.2 | System SHALL schedule the next run at the first 03:00 Europe/Amsterdam after the offers end (the run's expiry, FR-001.5), not at midnight, so the supermarket has published its new week. Measured in October 2026: AH, Lidl and Aldi end on Sunday (run Monday 03:00), Jumbo, Dirk and Hoogvliet on Tuesday (run Wednesday 03:00); Dirk's end time in UTC (23:59Z = 01:59 local) still gives Wednesday 03:00 | HIGH     | ✅ Implemented |
 | FR-003.3 | System SHALL support enable/disable toggle per supermarket             | MEDIUM   | ✅ Implemented |
 | FR-003.4 | System SHALL NOT run multiple instances of same scraper concurrently   | HIGH     | ✅ Implemented |
 | FR-003.5 | System SHALL deactivate expired discounts on each scheduler check      | HIGH     | ✅ Implemented |
 | FR-003.6 | System SHALL log all scheduler activities                              | MEDIUM   | ✅ Implemented |
 | FR-003.7 | System SHALL persist scheduled run state across restarts               | MEDIUM   | ✅ Implemented |
 | FR-003.8 | System SHALL trigger scrapers via internal API calls                   | MEDIUM   | ✅ Implemented |
+| FR-003.9 | System SHALL run each supermarket's weekly auto run as catalog first, then offers, so regular prices and offers change on the supermarket's own week (AH Monday to Sunday, others their own); a failed catalog run does not stop the offers run | HIGH | ✅ Implemented |
+| FR-003.10 | System SHALL fall back when a date is missed: (a) while a run is in progress the next run is set to a retry 3 hours later, replaced by a successful offers run, so a failed or hanging run is retried; (b) offers without an end date, or whose end date has already passed (the site still showed the old week), are fetched again 3 hours later; (c) runs are never more than 7 days apart, also when the end date is further away; (d) a run that was due while the server was down starts on the next check | HIGH | ✅ Implemented |
+| FR-003.11 | System SHALL keep the per-supermarket enabled setting when a run updates the schedule, so a manual run does not switch the automatic runs back on | MEDIUM | ✅ Implemented |
 
 #### FR-004: REST API
 
@@ -693,7 +698,7 @@ flowchart TD
 | FR-007.2 | System SHALL store the supermarket product id, brand, pack size, unit price, image and regular price   | HIGH     | ✅ Implemented |
 | FR-007.3 | System SHALL record a price history row only when a regular price changes                             | MEDIUM   | ✅ Implemented |
 | FR-007.4 | System SHALL mark products missing from a run as not in the catalog, unless the run saw under 50% of the known products | MEDIUM | ✅ Implemented |
-| FR-007.5 | System SHALL run catalog scrapes weekly (`CATALOG_CRON`, default Monday 03:17; `CATALOG_ENABLED=false` disables) and on demand from the admin UI | MEDIUM | ✅ Implemented |
+| FR-007.5 | System SHALL run each supermarket's catalog scrape in its weekly auto run, right before its offers run (FR-003.9), and on demand from the admin UI; `CATALOG_ENABLED=false` leaves the catalog step out | MEDIUM | ✅ Implemented |
 | FR-007.6 | System SHALL track every catalog run (status, counts, duration, error) in `catalog_runs`             | MEDIUM   | ✅ Implemented |
 | FR-007.7 | System SHALL apply schema migrations from `scraper/migrations` on startup                              | HIGH     | ✅ Implemented |
 | FR-007.8 | Catalog clients for Dirk, PLUS and Aldi                                                                | MEDIUM   | ✅ Implemented |
@@ -771,13 +776,21 @@ and are skipped.
   product's own regular price. An offer whose products cannot be looked up is
   kept as one discount by name, as before.
 
-**PLUS catalog and offers.** plus.nl is an OutSystems app behind Imperva, so it
-is read through a headless browser (`clients/plus/PlusSite.ts`). The site's
-product list call (`DataActionGetProductListAndCategoryInfo`) without a
-category lists the whole assortment, 12 products per page (17,389 products on
-1,450 pages on 16 October 2026). The scraper opens plus.nl, takes the request
-the page itself sends as a template (it carries the current module and API
-versions and the week period) and requests every page from inside the page.
+**PLUS catalog and offers.** plus.nl is an OutSystems app. It is read over
+plain HTTP, without a browser (`clients/plus/PlusSite.ts`). The site's product
+list call (`DataActionGetProductListAndCategoryInfo`) without a category lists
+the whole assortment, 12 products per page, a fixed server page size (17,340
+products on 1,445 pages on 19 October 2026). Imperva in front of plus.nl lets
+these requests through. Each request carries OutSystems' fixed anonymous CSRF
+token (`T6C+9iB49TLra4jEsMeSckDMNhQ=`, the same for every anonymous visitor)
+and the current module and api versions, which change with every release of
+the site. The scraper reads them from the site at the start of a run: the
+module version from `/moduleservices/moduleversioninfo`, the api version from
+the product list screen's script found through `/moduleservices/moduleinfo`.
+When the server answers `hasApiVersionChanged` or `hasModuleVersionChanged`,
+it reads them again and repeats the page. The week period in the site's own
+request does not change the results and is left out. The old PLUS app API
+(`pls-sprmrkt-mw.prd.vdc1.plus.nl`) no longer exists.
 
 - The catalog client stores each product's regular price (`OriginalPrice`),
   pack size ("Per 1000 ml", "Per kilo" as 1 kg) and SKU.
@@ -1045,14 +1058,14 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> Created: Create scraper_run record
-    Created --> Running: Initialize browser
+    Created --> Running: Start HTTP client
     Running --> Scraping: Navigate to website
     Scraping --> Processing: Extract data
     Processing --> Updating: Update database
     Updating --> Scheduling: Create scheduled_run
     Scheduling --> Success: Complete successfully
 
-    Running --> Failed: Browser error
+    Running --> Failed: API error
     Scraping --> Failed: Network timeout
     Processing --> Failed: Data extraction error
     Updating --> Failed: Database error
@@ -1360,10 +1373,9 @@ CREATE INDEX idx_discount_product_active ON discounts(product_id, active);
 
 ```mermaid
 flowchart TD
-    Start([Scraper Triggered]) --> Init[Initialize Browser]
-    Init --> Navigate[Navigate to Supermarket URL]
-    Navigate --> Cookie[Handle Cookie Popup]
-    Cookie --> ExpDate[Extract Promotion Expire Date]
+    Start([Scraper Triggered]) --> Init[Start HTTP Client]
+    Init --> Navigate[Call Supermarket API]
+    Navigate --> ExpDate[Extract Promotion Expire Date]
     ExpDate --> CreateRun[(Create scraper_run<br/>status: running)]
 
     CreateRun --> LoopStart{More Categories?}
@@ -1762,7 +1774,7 @@ C4Context
     System_Boundary(ds, "Supermarket Scraper System") {
         System(web, "Web Interface", "React SPA with Vite")
         System(api, "REST API", "Express + TypeScript")
-        System(scraper, "Scraper Engine", "Playwright-based scrapers")
+        System(scraper, "Scraper Engine", "HTTP scrapers, no browser")
         System(scheduler, "Scheduler Service", "Cron-based automation")
         SystemDb(db, "PostgreSQL Database", "Stores products & discounts")
     }
@@ -1880,7 +1892,7 @@ graph TB
 | ----------------------- | ------------------ | -------------------------- | ------------------------ |
 | Frontend ↔ Backend      | Axios              | API communication          | HTTP/REST                |
 | Backend ↔ Database      | pg (node-postgres) | Data persistence           | PostgreSQL Wire Protocol |
-| Scraper ↔ Websites      | Playwright         | Web scraping               | HTTP/HTTPS               |
+| Scraper ↔ Websites      | axios              | Supermarket APIs and site data | HTTP/HTTPS           |
 | Scheduler ↔ Backend     | node-cron + Axios  | Automated triggers         | HTTP (internal)          |
 | Web Server ↔ Frontend   | Nginx              | Static file serving        | HTTP                     |
 | Container Orchestration | Docker Compose     | Multi-container deployment | Docker API               |
@@ -1963,7 +1975,6 @@ graph TB
 | **Discount Lifecycle** | States: Scraped → Active → Inactive/Expired                                            |
 | **Full-Text Search**   | Search technique using GIN indexes for natural language queries                        |
 | **JSONB**              | PostgreSQL's binary JSON storage format                                                |
-| **Playwright**         | Browser automation library for web scraping                                            |
 | **Scheduled Run**      | Automated scraper execution based on promotion schedules                               |
 | **Scraper Run**        | Single execution of scraper for one supermarket                                        |
 | **UPSERT**             | Database operation that updates if exists, inserts if not                              |

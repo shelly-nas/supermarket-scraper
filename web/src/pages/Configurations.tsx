@@ -161,6 +161,15 @@ const Configurations: React.FC = () => {
   };
 
 
+  const formatNextRun = (iso: string) =>
+    new Date(iso).toLocaleString('nl-NL', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
   const formatCount = (value: number | undefined) => (value || 0).toLocaleString('nl-NL');
 
   const pageHeader = (
@@ -255,7 +264,10 @@ const Configurations: React.FC = () => {
       <section className="page-section">
         <div className="section-header">
           <h2 className="t-heading">Weekly offers</h2>
-          <p className="t-small">Current discounts, re-scraped when they expire</p>
+          <p className="t-small">
+            Current discounts. The weekly auto run starts at 03:00 after they end: the catalog
+            first, then the new offers
+          </p>
         </div>
         <div className="supermarket-grid">
           {statuses.map((status) => {
@@ -282,6 +294,12 @@ const Configurations: React.FC = () => {
                     <div>
                       <dt>Products</dt>
                       <dd className="num">{status.productsScraped}</dd>
+                    </div>
+                  )}
+                  {status.nextRunAt && scheduledEnabled && (
+                    <div>
+                      <dt>Next run</dt>
+                      <dd>{formatNextRun(status.nextRunAt)}</dd>
                     </div>
                   )}
                   {status.promotionExpireDate && (
@@ -313,7 +331,7 @@ const Configurations: React.FC = () => {
                   {status.promotionExpireDate != null && (
                     <label
                       className="switch"
-                      title="Re-scrape automatically when the discounts expire"
+                      title="Every week when the offers end: the catalog first, then the new offers"
                     >
                       <input
                         type="checkbox"
@@ -322,7 +340,7 @@ const Configurations: React.FC = () => {
                         onChange={() => handleToggleSchedule(status.key, scheduledEnabled)}
                       />
                       <span className="switch-track" />
-                      Auto re-scrape
+                      Weekly auto run
                     </label>
                   )}
                 </div>

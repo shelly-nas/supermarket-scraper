@@ -56,7 +56,9 @@ const CatalogSection: React.FC = () => {
     <section className="page-section">
       <div className="section-header">
         <h2 className="t-heading">Full assortment</h2>
-        <p className="t-small">All products at regular price, every Monday 03:17</p>
+        <p className="t-small">
+          All products at regular price, refreshed in each supermarket's weekly auto run
+        </p>
       </div>
       {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
       <div className="supermarket-grid">

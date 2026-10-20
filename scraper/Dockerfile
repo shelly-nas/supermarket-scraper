@@ -1,5 +1,8 @@
-# Use Node.js LTS version
-FROM --platform=linux/amd64 mcr.microsoft.com/playwright:v1.56.1-jammy
+# Use Node.js LTS version. No browser needed: every scraper uses plain HTTP.
+FROM --platform=linux/amd64 node:20-bookworm-slim
+
+# Playwright is only a dev dependency (old debug scripts); never fetch browsers
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Create app directory
 WORKDIR /app

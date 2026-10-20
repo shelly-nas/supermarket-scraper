@@ -46,7 +46,7 @@ Behaviour per feature: [docs/FUNCTIONAL_DESIGN.md](docs/FUNCTIONAL_DESIGN.md). B
 | `clients/catalog/<Name>CatalogClient.ts` | Full assortment at regular price, extends `CatalogClient` |
 | `utils/ProductMatch.ts`, `utils/Quantity.ts`, `utils/Promotion.ts` | Same product across supermarkets, pack sizes, promotion prices |
 | `data/PostgresDataManager.ts`, `controllers/` | Writes to the database, one controller per table |
-| `services/SchedulerService.ts`, `services/CatalogService.ts` | Scheduled offer scrapes and catalog runs |
+| `services/SchedulerService.ts`, `services/CatalogService.ts`, `utils/Schedule.ts` | Weekly run per supermarket (catalog, then offers) and when it is due |
 | `utils/ConfigHelper.ts` | Registry of offer and catalog clients |
 
 Adding a supermarket or a catalog scraper: see the "Adding ..." sections in `docs/ARCHITECTURE.md`.

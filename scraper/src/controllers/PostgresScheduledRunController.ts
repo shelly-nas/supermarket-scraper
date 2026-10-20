@@ -41,39 +41,29 @@ class PostgresScheduledRunController {
   }
 
   /**
-   * Calculate the next run time based on promotion expiry date
-   * Runs at 1 minute past midnight on the day AFTER promotions expire (to catch new promotions)
+   * Records the next run of a supermarket and the end date of its current
+   * offers (utils/Schedule.ts decides when). A new row is enabled; an existing
+   * row keeps its enabled setting, so a manual run does not switch the
+   * automatic runs back on. Without an end date the previous one is kept.
    */
-  private calculateNextRunTime(promotionExpireDate: Date): Date {
-    const nextRun = new Date(promotionExpireDate);
-    // Add one day to run the day after expiry
-    nextRun.setDate(nextRun.getDate() + 1);
-    // Run at midnight
-    nextRun.setHours(0, 0, 0, 0);
-    return nextRun;
-  }
-
   async upsertScheduledRun(
     supermarket: string,
-    promotionExpireDate: Date,
-    enabled: boolean = true
+    promotionExpireDate: Date | null,
+    nextRunAt: Date
   ): Promise<number> {
     scraperLogger.debug(
-      `Upserting scheduled run for: ${supermarket} with expire date: ${promotionExpireDate}`
+      `Upserting scheduled run for: ${supermarket} with expire date: ${promotionExpireDate}, next run: ${nextRunAt}`
     );
     try {
-      const nextRunAt = this.calculateNextRunTime(promotionExpireDate);
-
       const result = await this.db.query<{ id: number }>(
-        `INSERT INTO scheduled_runs (supermarket, next_run_at, promotion_expire_date, enabled) 
-         VALUES ($1, $2, $3, $4) 
-         ON CONFLICT (supermarket) 
-         DO UPDATE SET 
+        `INSERT INTO scheduled_runs (supermarket, next_run_at, promotion_expire_date, enabled)
+         VALUES ($1, $2, COALESCE($3, $2), true)
+         ON CONFLICT (supermarket)
+         DO UPDATE SET
            next_run_at = EXCLUDED.next_run_at,
-           promotion_expire_date = EXCLUDED.promotion_expire_date,
-           enabled = EXCLUDED.enabled
+           promotion_expire_date = COALESCE($3, scheduled_runs.promotion_expire_date)
          RETURNING id`,
-        [supermarket, nextRunAt, promotionExpireDate, enabled]
+        [supermarket, nextRunAt, promotionExpireDate]
       );
 
       const id = result.rows[0].id;
