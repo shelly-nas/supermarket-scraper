@@ -5,7 +5,8 @@ Baskit app. Three Docker services: `postgres` <- `scraper-api` (Express, TypeScr
 (React + Vite admin UI behind nginx). Follows the shelly-nas standards (plugin `shelly-fundamentals`).
 
 Module map, data model, environments and how-tos: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-Behaviour per feature: [docs/FUNCTIONAL_DESIGN.md](docs/FUNCTIONAL_DESIGN.md). Both are large: read only the section you need.
+Behaviour per functionality: one file per feature in `docs/functional/`, listed in [docs/FUNCTIONAL_DESIGN.md](docs/FUNCTIONAL_DESIGN.md).
+Read only the file and section you need.
 
 ## Rules
 
@@ -16,7 +17,8 @@ Behaviour per feature: [docs/FUNCTIONAL_DESIGN.md](docs/FUNCTIONAL_DESIGN.md). B
   `scraper/src/data/Migrations.ts`. The base schema is `database/src/schema.sql`.
 - **Styles:** `web/src/styles/tokens.css` and `components.css` are copies from the `design-richtlijnen` skill.
   Do not edit them here; copy them again. App CSS uses roles (`var(--primary)`), never hex values.
-- **After a functional change**, update the matching section of `docs/FUNCTIONAL_DESIGN.md`. **After adding,
+- **After a functional change**, update the file of that functionality in `docs/functional/` (a new
+  functionality gets its own file and a row in `docs/FUNCTIONAL_DESIGN.md`). **After adding,
   removing or renaming a module, or moving a responsibility**, update its section of `docs/ARCHITECTURE.md`.
   Change this file only when a rule or command changes.
 

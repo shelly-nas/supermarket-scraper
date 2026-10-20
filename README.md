@@ -2,7 +2,7 @@
 
 A containerized scraper with REST API that collects the products of Dutch supermarkets (Albert Heijn, Aldi, Dirk, Hoogvliet, Jumbo, Lidl, PLUS): the full assortment with regular prices and pack quantities where a catalog scraper exists, and the weekly offers of every supermarket. Everything is stored in PostgreSQL and served to the admin UI and, through a read-only public API, to the Baskit app for comparing prices per kilo, liter or piece.
 
-Until October 2026 this project was called `discount-scraper`; see "Rename from discount-scraper" in [docs/FUNCTIONAL_DESIGN.md](docs/FUNCTIONAL_DESIGN.md).
+Until October 2026 this project was called `discount-scraper`; see "Rename from discount-scraper" in [docs/functional/overview.md](docs/functional/overview.md).
 
 ## Features
 
@@ -126,7 +126,7 @@ never goes to production. See `.github/workflows/acc.yml` and `docker-compose.ac
 ### Public API (for Baskit and other consumer apps)
 
 Read-only, versioned endpoints under `/api/public/v1`. See
-[docs/FUNCTIONAL_DESIGN.md](docs/FUNCTIONAL_DESIGN.md) section 5.5 for the full contract.
+[docs/functional/api.md](docs/functional/api.md) for the full contract.
 
 ```bash
 curl http://localhost:3001/api/public/v1/supermarkets
