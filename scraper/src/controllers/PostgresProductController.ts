@@ -66,7 +66,7 @@ class PostgresProductController {
     scraperLogger.debug("Deleting all products from database.");
     try {
       await this.db.query("TRUNCATE TABLE products CASCADE");
-      scraperLogger.info("All products deleted successfully.");
+      scraperLogger.debug("All products deleted successfully.");
     } catch (error) {
       scraperLogger.error("Error deleting products", error);
       throw error;
@@ -74,7 +74,7 @@ class PostgresProductController {
   }
 
   async getProducts(): Promise<ProductModel[]> {
-    scraperLogger.info("Fetching all products.");
+    scraperLogger.debug("Fetching all products.");
     try {
       const result = await this.db.query<ProductModel>(
         "SELECT id, name, category, supermarket, product_url FROM products ORDER BY id"
@@ -481,7 +481,7 @@ class PostgresProductController {
       }
 
       if (updateFields.length === 0) {
-        scraperLogger.info("No fields to update.");
+        scraperLogger.debug("No fields to update.");
         return false;
       }
 
@@ -529,9 +529,9 @@ class PostgresProductController {
       }
 
       if (changesMade > 0) {
-        scraperLogger.info(`${changesMade} products updated successfully.`);
+        scraperLogger.debug(`${changesMade} products updated successfully.`);
       } else {
-        scraperLogger.info("No updates were made to products.");
+        scraperLogger.debug("No updates were made to products.");
       }
     } catch (error) {
       scraperLogger.error("Error updating multiple products", error);

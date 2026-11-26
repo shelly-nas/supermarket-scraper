@@ -38,9 +38,6 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
-    volumes:
-      # Mount logs directory for persistence
-      - ./scraper/logs:/app/logs
 
   web:
     build:

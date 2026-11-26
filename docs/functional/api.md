@@ -78,47 +78,19 @@ interface DiscountResponse {
 
 ### POST /api/scraper/run/:supermarket
 
+Starts a run of the supermarket in the background: its full assortment and its offers (see [scheduling](scheduling.md), FR-003.9). Follow it in `GET /api/scraper/runs`.
+
 **Parameters:**
 
 - `:supermarket` - One of: `albert-heijn`, `aldi`, `dirk`, `hoogvliet`, `jumbo`, `lidl`, `plus`
 
-**Response:**
+**Responses:**
 
-```typescript
-interface ScraperRunResponse {
-  success: boolean;
-  message: string;
-  data: {
-    runId: number;
-    supermarket: string;
-    productsScraped: number;
-    productsCreated: number;
-    productsUpdated: number;
-    discountsCreated: number;
-    discountsSkipped: number;
-    timestamp: string; // ISO 8601
-  };
-}
-```
+- `202 { success: true, runId: number, supermarket: string }`: the run started
+- `400`: unknown supermarket
+- `409`: a run for this supermarket is already in progress
 
-**Example:**
-
-```json
-{
-  "success": true,
-  "message": "Scraper completed for Albert Heijn",
-  "data": {
-    "runId": 42,
-    "supermarket": "Albert Heijn",
-    "productsScraped": 150,
-    "productsCreated": 12,
-    "productsUpdated": 138,
-    "discountsCreated": 150,
-    "discountsSkipped": 0,
-    "timestamp": "2025-10-24T14:30:00.000Z"
-  }
-}
-```
+A run in `GET /api/scraper/runs` carries, next to the offer counts, `catalogProducts`, `catalogPricesChanged` and `catalogProductsRemoved` for its assortment step (missing when the run had none) and `errorMessage` naming each failed step ("Assortment: ...", "Offers: ...").
 
 ### GET /api/dashboard/stats
 
@@ -294,21 +266,13 @@ interface CompareResponse {
 }
 ```
 
-### Catalog admin API (`/api/catalog`)
-
-| Endpoint | Description |
-| -------- | ----------- |
-| `GET /api/catalog/status` | Per supermarket: `supported`, `running`, `productsInCatalog`, `lastUpdated`, `lastRun` |
-| `GET /api/catalog/runs?limit=` | Latest catalog runs (default 50, max 200) |
-| `POST /api/catalog/run/:supermarket` | Starts a catalog run in the background: `202 { runId }`, `409` when one is already running, `400` for supermarkets without a catalog scraper |
-
 ## 9.1 API Endpoint Summary
 
 | Method | Endpoint                             | Purpose                               |
 | ------ | ------------------------------------ | ------------------------------------- |
 | GET    | `/health`                            | Health check                          |
 | GET    | `/api/discounts`                     | Retrieve all active discounts         |
-| POST   | `/api/scraper/run/:supermarket`      | Trigger scraper run                   |
+| POST   | `/api/scraper/run/:supermarket`      | Start a run (assortment and offers)   |
 | GET    | `/api/scraper/runs`                  | Get all scraper runs                  |
 | GET    | `/api/scraper/runs/:supermarket`     | Get runs for specific supermarket     |
 | GET    | `/api/scraper/run/:id`               | Get specific run by ID                |

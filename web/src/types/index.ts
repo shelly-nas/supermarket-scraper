@@ -50,10 +50,13 @@ export interface SupermarketStatus {
   name: string;
   status: "success" | "failed" | "running" | "pending";
   lastRun?: string;
+  /** Products with an active offer. */
   productsScraped?: number;
+  /** Products in the full assortment. */
+  productsInCatalog?: number;
   promotionExpireDate?: string | null;
   scheduledEnabled?: boolean;
-  /** When the next weekly run (catalog, then offers) is due. */
+  /** When the next run (assortment and offers) is due. */
   nextRunAt?: string | null;
 }
 
@@ -70,29 +73,8 @@ export interface ScraperRun {
   startedAt: string;
   completedAt?: string;
   durationSeconds?: number;
-}
-
-export interface CatalogRun {
-  id: number;
-  supermarket: string;
-  status: 'running' | 'success' | 'failed';
-  products_seen: number;
-  products_created: number;
-  products_updated: number;
-  prices_changed: number;
-  products_removed: number;
-  error_message: string | null;
-  started_at: string;
-  completed_at: string | null;
-  duration_seconds: number | null;
-}
-
-export interface CatalogStatus {
-  key: string;
-  name: string;
-  supported: boolean;
-  running: boolean;
-  productsInCatalog: number;
-  lastUpdated: string | null;
-  lastRun: CatalogRun | null;
+  /** Assortment step of the run; missing when the run had none. */
+  catalogProducts?: number;
+  catalogPricesChanged?: number;
+  catalogProductsRemoved?: number;
 }

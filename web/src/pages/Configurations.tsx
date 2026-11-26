@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { configurationsService } from '../services/api';
 import { ConfigurationsStats, SupermarketStatus, ScraperRun } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
-import CatalogSection from '../components/CatalogSection';
 import StatusBadge from '../components/StatusBadge';
 import { EmptyState, ErrorAlert, ErrorState } from '../components/PageState';
 import { AlertIcon, ChevronLeftIcon, ChevronRightIcon } from '../components/Icons';
@@ -93,13 +93,17 @@ const Configurations: React.FC = () => {
     setRunningScrapers(prev => new Set(prev).add(supermarketKey));
     
     try {
+      // The run continues in the background; the 30-second refresh follows it.
       await configurationsService.runScraper(supermarketKey);
-      // Reload data after scraper completes
       await loadConfigurationsData();
-      await loadLogs(); // Also reload logs to show the new run
+      await loadLogs();
     } catch (err) {
-      console.error('Failed to run scraper:', err);
-      setActionError('The offers run failed. Check the scraper run logs below for the cause.');
+      console.error('Failed to start run:', err);
+      setActionError(
+        axios.isAxiosError(err) && err.response?.status === 409
+          ? 'A run for this supermarket is already in progress.'
+          : 'The run could not start. Try again in a moment.'
+      );
     } finally {
       // Remove from running scrapers
       setRunningScrapers(prev => {
@@ -260,18 +264,18 @@ const Configurations: React.FC = () => {
         </div>
       )}
 
-      {/* Weekly offers */}
+      {/* Supermarkets: one run fetches the full assortment and the offers */}
       <section className="page-section">
         <div className="section-header">
-          <h2 className="t-heading">Weekly offers</h2>
+          <h2 className="t-heading">Supermarkets</h2>
           <p className="t-small">
-            Current discounts. The weekly auto run starts at 03:00 after they end: the catalog
-            first, then the new offers
+            One run fetches the full assortment and the offers. The auto run starts at 03:00 after the
+            offers end, and anyway when the last successful run is more than 8 days old
           </p>
         </div>
         <div className="supermarket-grid">
           {statuses.map((status) => {
-            const isRunning = runningScrapers.has(status.key);
+            const isRunning = runningScrapers.has(status.key) || status.status === 'running';
             const isToggling = togglingSchedule.has(status.key);
             const displayStatus = isRunning ? 'running' : status.status;
             const expired = isExpired(status.promotionExpireDate);
@@ -290,10 +294,14 @@ const Configurations: React.FC = () => {
                       <dd>{new Date(status.lastRun).toLocaleString('nl-NL')}</dd>
                     </div>
                   )}
+                  <div>
+                    <dt>Assortment</dt>
+                    <dd className="num">{formatCount(status.productsInCatalog)}</dd>
+                  </div>
                   {status.productsScraped !== undefined && (
                     <div>
-                      <dt>Products</dt>
-                      <dd className="num">{status.productsScraped}</dd>
+                      <dt>Offers</dt>
+                      <dd className="num">{formatCount(status.productsScraped)}</dd>
                     </div>
                   )}
                   {status.nextRunAt && scheduledEnabled && (
@@ -325,24 +333,22 @@ const Configurations: React.FC = () => {
                         Running…
                       </>
                     ) : (
-                      'Run offers'
+                      'Run'
                     )}
                   </button>
-                  {status.promotionExpireDate != null && (
-                    <label
-                      className="switch"
-                      title="Every week when the offers end: the catalog first, then the new offers"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={scheduledEnabled}
-                        disabled={isToggling}
-                        onChange={() => handleToggleSchedule(status.key, scheduledEnabled)}
-                      />
-                      <span className="switch-track" />
-                      Weekly auto run
-                    </label>
-                  )}
+                  <label
+                    className="switch"
+                    title="When the offers end, and after 8 days without a successful run: the assortment and the offers"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={scheduledEnabled}
+                      disabled={isToggling}
+                      onChange={() => handleToggleSchedule(status.key, scheduledEnabled)}
+                    />
+                    <span className="switch-track" />
+                    Auto run
+                  </label>
                 </div>
               </div>
             );
@@ -350,14 +356,11 @@ const Configurations: React.FC = () => {
         </div>
       </section>
 
-      {/* Full catalog scrapes */}
-      <CatalogSection />
-
       {/* Scraper Run Logs */}
       <section className="page-section">
         <div className="section-header">
           <h2 className="t-heading">Scraper run logs</h2>
-          <p className="t-small">The last 50 offers runs, newest first</p>
+          <p className="t-small">The last 50 runs, newest first</p>
         </div>
 
         {logsError && (
@@ -378,7 +381,7 @@ const Configurations: React.FC = () => {
           ) : runs.length === 0 ? (
             <EmptyState
               title="No scraper runs yet"
-              message="Every offers run is logged here with its duration and results. Start one with Run offers above."
+              message="Every run is logged here with its duration and results. Start one with Run above."
             />
           ) : (
             <div className="table-wrap">
@@ -389,7 +392,8 @@ const Configurations: React.FC = () => {
                     <th>Supermarket</th>
                     <th>Status</th>
                     <th className="num">Duration</th>
-                    <th className="num">Products</th>
+                    <th className="num">Assortment</th>
+                    <th className="num">Offers</th>
                     <th className="num">Discounts</th>
                   </tr>
                 </thead>
@@ -407,8 +411,20 @@ const Configurations: React.FC = () => {
                       </td>
                       <td>
                         <StatusBadge status={run.status} />
+                        {run.errorMessage && <span className="log-error">{run.errorMessage}</span>}
                       </td>
                       <td className="num">{formatDuration(run.durationSeconds)}</td>
+                      <td className="num">
+                        {run.catalogProducts == null ? (
+                          '—'
+                        ) : (
+                          <>
+                            {formatCount(run.catalogProducts)} / {run.catalogPricesChanged || 0} /{' '}
+                            {run.catalogProductsRemoved || 0}
+                            <span className="log-subtitle">products / price changes / removed</span>
+                          </>
+                        )}
+                      </td>
                       <td className="num">
                         {run.productsScraped || 0} / {run.productsCreated || 0} / {run.productsUpdated || 0}
                         <span className="log-subtitle">scraped / added / updated</span>
@@ -455,9 +471,9 @@ const Configurations: React.FC = () => {
 
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
-        title="Run offers now?"
-        message={`This fetches the current offers for ${confirmDialog.supermarket} from its website.`}
-        confirmText="Run offers"
+        title="Run now?"
+        message={`This fetches the full assortment and the current offers of ${confirmDialog.supermarket}. It runs in the background and can take a few minutes.`}
+        confirmText="Run"
         cancelText="Cancel"
         onConfirm={confirmRunScraper}
         onCancel={cancelRunScraper}

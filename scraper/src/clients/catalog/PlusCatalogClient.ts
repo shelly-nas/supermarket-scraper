@@ -1,4 +1,5 @@
-import CatalogClient from "./CatalogClient";
+import CatalogClient, { CatalogOffers } from "./CatalogClient";
+import { mapPlusDiscount, plusOffers } from "../PlusApiClient";
 import { ICatalogProduct } from "../../interfaces/ICatalogProduct";
 import { unitPriceText } from "../../utils/Quantity";
 import { scraperLogger } from "../../utils/Logger";
@@ -44,11 +45,16 @@ class PlusCatalogClient extends CatalogClient {
     this.createSite = createSite;
   }
 
+  /** Products on offer seen by the last fetchCatalog. */
+  private onOffer: PlusProduct[] = [];
+
   async fetchCatalog(onPage: (products: ICatalogProduct[]) => Promise<void>): Promise<void> {
+    this.onOffer = [];
     const site = this.createSite();
     try {
       await site.open();
       const total = await site.forEachPage("", async (products) => {
+        this.onOffer.push(...products.filter((p) => mapPlusDiscount(p) !== null));
         const mapped = products.map(mapPlusProduct).filter((p): p is ICatalogProduct => p !== null);
         if (mapped.length > 0) await onPage(mapped);
       });
@@ -57,6 +63,10 @@ class PlusCatalogClient extends CatalogClient {
     } finally {
       await site.close();
     }
+  }
+
+  catalogOffers(): CatalogOffers {
+    return plusOffers(this.onOffer);
   }
 }
 

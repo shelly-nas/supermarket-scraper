@@ -189,7 +189,7 @@ class JumboGraphql {
       if (page.count >= 0) total = page.count;
       if (offSet === 0) {
         if (total === 0 || page.products.length === 0) throw new Error("Jumbo: the assortment returned no products");
-        scraperLogger.info(`Jumbo: ${total} products in the assortment`);
+        scraperLogger.debug(`Jumbo: ${total} products in the assortment`);
       }
       const fresh = page.products.filter((p) => p?.sku && !seen.has(p.sku));
       fresh.forEach((p) => seen.add(p.sku));

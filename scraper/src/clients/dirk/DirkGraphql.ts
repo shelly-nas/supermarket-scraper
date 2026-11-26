@@ -186,7 +186,7 @@ class DirkGraphql {
     const departments = await this.departments();
     const webGroups = departments.flatMap((d) => d.webGroups ?? []);
     if (webGroups.length === 0) throw new Error("Dirk: no web groups found");
-    scraperLogger.info(`Dirk: ${departments.length} departments, ${webGroups.length} web groups`);
+    scraperLogger.debug(`Dirk: ${departments.length} departments, ${webGroups.length} web groups`);
 
     const seen = new Set<number>();
     for (const group of webGroups) {

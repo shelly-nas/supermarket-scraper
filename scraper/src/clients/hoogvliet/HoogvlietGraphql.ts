@@ -222,7 +222,7 @@ class HoogvlietGraphql {
   async forEachCategory(onCategory: (products: HoogvlietListedProduct[]) => Promise<void>): Promise<void> {
     const categories = await this.categories();
     if (categories.length === 0) throw new Error("Hoogvliet: no product categories returned");
-    scraperLogger.info(`Hoogvliet: ${categories.length} categories`);
+    scraperLogger.debug(`Hoogvliet: ${categories.length} categories`);
 
     const seen = new Set<string>();
     for (const category of categories) {
@@ -231,7 +231,7 @@ class HoogvlietGraphql {
       // Promotion groups (GroupedProduct) only exist in the offers category;
       // the products they bundle carry the promotion themselves.
       const products = (await this.details(skus)).filter((p) => p.__typename !== "GroupedProduct");
-      scraperLogger.info(`Hoogvliet: '${category.name}': ${products.length} new products`);
+      scraperLogger.debug(`Hoogvliet: '${category.name}': ${products.length} new products`);
       if (products.length > 0) await onCategory(products.map((p) => ({ ...p, category: category.name })));
     }
   }

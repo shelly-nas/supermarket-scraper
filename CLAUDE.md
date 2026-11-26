@@ -42,13 +42,13 @@ Read only the file and section you need.
 
 | Path | Role |
 |---|---|
-| `api/Routes.ts`, `api/CatalogRoutes.ts` | Admin API under `/api` (used by `web/`) |
+| `api/Routes.ts`, `api/RunRoutes.ts` | Admin API under `/api` (used by `web/`) |
 | `api/PublicRoutes.ts` + `ProductSearch.ts`, `PriceComparison.ts`, `SameProducts.ts`, `ImageProxy.ts` | Public API for Baskit |
 | `clients/<Name>ApiClient.ts` (+ `clients/<name>/`) | Weekly offers per supermarket, extends `ApiClient` |
 | `clients/catalog/<Name>CatalogClient.ts` | Full assortment at regular price, extends `CatalogClient` |
 | `utils/ProductMatch.ts`, `utils/Quantity.ts`, `utils/Promotion.ts` | Same product across supermarkets, pack sizes, promotion prices |
 | `data/PostgresDataManager.ts`, `controllers/` | Writes to the database, one controller per table |
-| `services/SchedulerService.ts`, `services/CatalogService.ts`, `utils/Schedule.ts` | Weekly run per supermarket (catalog, then offers) and when it is due |
+| `services/RunService.ts`, `services/SchedulerService.ts`, `utils/Schedule.ts` | One run per supermarket (assortment and offers) and when it is due |
 | `utils/ConfigHelper.ts` | Registry of offer and catalog clients |
 
 Adding a supermarket or a catalog scraper: see the "Adding ..." sections in `docs/ARCHITECTURE.md`.

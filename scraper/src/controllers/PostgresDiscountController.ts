@@ -42,7 +42,7 @@ class PostgresDiscountController {
     scraperLogger.debug("Deleting all discounts from database.");
     try {
       await this.db.query("TRUNCATE TABLE discounts CASCADE");
-      scraperLogger.info("All discounts deleted successfully.");
+      scraperLogger.debug("All discounts deleted successfully.");
     } catch (error) {
       scraperLogger.error("Error deleting discounts", error);
       throw error;
@@ -50,7 +50,7 @@ class PostgresDiscountController {
   }
 
   async getDiscounts(): Promise<DiscountModel[]> {
-    scraperLogger.info("Fetching all discounts.");
+    scraperLogger.debug("Fetching all discounts.");
     try {
       const result = await this.db.query<DiscountRow>(
         "SELECT product_id, original_price, discount_price, unit_price, special_discount, expire_date, active FROM discounts ORDER BY expire_date DESC"
@@ -403,7 +403,7 @@ class PostgresDiscountController {
         return false;
       }
 
-      scraperLogger.info(
+      scraperLogger.debug(
         `Discounts for product ID: ${productId} have been deleted (${result.rowCount} records).`
       );
       return true;
@@ -424,7 +424,7 @@ class PostgresDiscountController {
       );
 
       const deletedCount = result.rowCount || 0;
-      scraperLogger.info(`Deleted ${deletedCount} expired discounts.`);
+      scraperLogger.debug(`Deleted ${deletedCount} expired discounts.`);
       return deletedCount;
     } catch (error) {
       scraperLogger.error("Error deleting expired discounts", error);
@@ -489,7 +489,7 @@ class PostgresDiscountController {
       );
 
       const deactivatedCount = result.rowCount || 0;
-      scraperLogger.info(`Deactivated ${deactivatedCount} discounts.`);
+      scraperLogger.debug(`Deactivated ${deactivatedCount} discounts.`);
       return deactivatedCount;
     } catch (error) {
       scraperLogger.error("Error deactivating discounts", error);
@@ -513,7 +513,7 @@ class PostgresDiscountController {
       );
 
       const deactivatedCount = result.rowCount || 0;
-      scraperLogger.info(
+      scraperLogger.debug(
         `Deactivated ${deactivatedCount} discounts for ${supermarket}.`
       );
       return deactivatedCount;
@@ -544,7 +544,7 @@ class PostgresDiscountController {
 
       const deactivatedCount = result.rowCount || 0;
       if (deactivatedCount > 0) {
-        scraperLogger.info(
+        scraperLogger.debug(
           `Deactivated ${deactivatedCount} expired discounts.`
         );
       } else {

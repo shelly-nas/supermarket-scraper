@@ -6,8 +6,8 @@ import SchedulerService from "./services/SchedulerService";
 import routes from "./api/Routes";
 import { runMigrations } from "./data/Migrations";
 import publicRoutes from "./api/PublicRoutes";
-import { createCatalogRoutes } from "./api/CatalogRoutes";
-import CatalogService from "./services/CatalogService";
+import { createRunRoutes } from "./api/RunRoutes";
+import RunService from "./services/RunService";
 
 
 const app: Application = express();
@@ -23,19 +23,9 @@ const corsOrigins = (process.env.CORS_ORIGINS || "")
 app.use(cors(corsOrigins.length > 0 ? { origin: corsOrigins } : undefined));
 app.use(express.json());
 
-// Request logging middleware
+// Requests at DEBUG only: the admin page polls every 30 seconds.
 app.use((req: Request, res: Response, next) => {
-  serverLogger.info(`${req.method} ${req.path}`);
-  next();
-});
-
-// Response logging middleware
-app.use((req: Request, res: Response, next) => {
-  const originalSend = res.send;
-  res.send = function (data) {
-    serverLogger.info(`${req.method} ${req.path} - Status: ${res.statusCode}`);
-    return originalSend.call(this, data);
-  };
+  res.on("finish", () => serverLogger.debug(`${req.method} ${req.path} ${res.statusCode}`));
   next();
 });
 
@@ -45,7 +35,7 @@ async function initializeDatabase(): Promise<boolean> {
   try {
     const connected = await dataManager.testConnection();
     if (connected) {
-      serverLogger.info("Database connection established successfully");
+      serverLogger.debug("Database connection established successfully");
       await runMigrations(dataManager.db);
       const filled = await dataManager.getProductController().backfillMatchFields();
       if (filled > 0) serverLogger.info(`Filled match fields of ${filled} existing products`);
@@ -60,14 +50,14 @@ async function initializeDatabase(): Promise<boolean> {
   // Don't close the pool - it's a singleton that should stay open
 }
 
-// Full catalog scrapes (regular prices), shared by the admin routes and the scheduler
-const catalogService = new CatalogService(new PostgresDataManager().db);
+// Runs (assortment and offers per supermarket), shared by the admin route and the scheduler
+const runService = new RunService(new PostgresDataManager());
 
 // Register API routes
 // Public read-only API for consumer apps (Baskit)
 app.use("/api/public/v1", publicRoutes);
-// Catalog admin endpoints (status, runs, manual trigger)
-app.use("/api/catalog", createCatalogRoutes(catalogService, new PostgresDataManager().db));
+// Starting a run by hand
+app.use("/api/scraper", createRunRoutes(runService));
 // Admin API used by the management web frontend
 app.use("/api", routes);
 
@@ -90,23 +80,18 @@ async function startServer() {
     process.exit(1);
   }
 
-  const staleCatalogRuns = await catalogService.getController().failStaleRuns();
-  if (staleCatalogRuns > 0) {
-    serverLogger.warn(`Marked ${staleCatalogRuns} interrupted catalog run(s) as failed`);
+  const interrupted = await new PostgresDataManager().getScraperRunController().failInterruptedRuns();
+  if (interrupted > 0) {
+    serverLogger.warn(`Marked ${interrupted} interrupted run(s) as failed`);
   }
 
   app.listen(PORT, () => {
     serverLogger.info(`API Server is running on port ${PORT}`);
-    serverLogger.info(`Health check: http://localhost:${PORT}/health`);
-    serverLogger.info(
-      `Run scraper: POST http://localhost:${PORT}/scraper/run/:supermarket`
-    );
 
     // Start the scheduler service
     const dataManager = new PostgresDataManager();
-    const scheduler = new SchedulerService(dataManager, PORT.toString(), catalogService);
+    const scheduler = new SchedulerService(dataManager, runService);
     scheduler.start();
-    serverLogger.info("Automated scheduler service initialized");
   });
 }
 

@@ -201,7 +201,7 @@ erDiagram
 
 #### Table: scraper_runs
 
-**Purpose:** Complete audit trail of all scraper executions with detailed metrics
+**Purpose:** Audit trail of every run (one per supermarket: the full assortment and the offers, FR-003.9) with its metrics
 
 | Column                | Type         | Constraints     | Description                       |
 | --------------------- | ------------ | --------------- | --------------------------------- |
@@ -213,7 +213,10 @@ erDiagram
 | products_created      | INTEGER      | DEFAULT 0       | New products created              |
 | discounts_deactivated | INTEGER      | DEFAULT 0       | Old discounts marked inactive     |
 | discounts_created     | INTEGER      | DEFAULT 0       | New discounts created             |
-| error_message         | TEXT         | NULL            | Error details if failed           |
+| catalog_products      | INTEGER      | NULL            | Products the assortment step saw (null without one, migration 009) |
+| catalog_prices_changed | INTEGER     | NULL            | Regular prices the assortment step changed |
+| catalog_products_removed | INTEGER   | NULL            | Products marked as no longer in the assortment |
+| error_message         | TEXT         | NULL            | Each failed step, e.g. "Assortment: ...; Offers: ..." |
 | started_at            | TIMESTAMP    | DEFAULT NOW()   | When run started                  |
 | completed_at          | TIMESTAMP    | NULL            | When run completed                |
 | duration_seconds      | INTEGER      | NULL            | Total run time                    |
@@ -405,6 +408,7 @@ To close that gap, the scraper API applies migrations itself:
 | `004_quantity.sql`      | `products.quantity_value`, `products.quantity_unit` (pack quantity in kg, l or stuk) |
 | `005_product_matching.sql` | `products.ean`, `products.match_brand`, `products.match_tokens` and their indexes (same product across supermarkets, FR-008) |
 | `007_article_number.sql` | `products.article_number` (Lidl permanent article number) and `products.price_observed_at` (when the supermarket itself last showed the regular price, FR-007.14) |
+| `009_one_run.sql` | `scraper_runs.catalog_products`, `catalog_prices_changed`, `catalog_products_removed` (one run per supermarket, FR-003.9); `scheduled_runs.promotion_expire_date` nullable (a schedule row before the first run, FR-003.13); `catalog_runs` no longer written |
 
 **Result:** a redeploy of the scraper API is sufficient to bring an existing database
 up to date — no manual `psql` intervention and no volume reset.

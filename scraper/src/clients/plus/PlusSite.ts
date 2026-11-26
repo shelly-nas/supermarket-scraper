@@ -224,7 +224,7 @@ class PlusSite {
       const page = await this.listPage(pageNumber, filterQuery);
       if (pageNumber === 1) {
         totalPages = page.totalPages;
-        scraperLogger.info(`PLUS: ${page.totalItems} products on ${totalPages} pages${filterQuery ? " (offers)" : ""}`);
+        scraperLogger.debug(`PLUS: ${page.totalItems} products on ${totalPages} pages${filterQuery ? " (offers)" : ""}`);
       }
       const fresh = page.products.filter((p) => !seen.has(p.SKU));
       fresh.forEach((p) => seen.add(p.SKU));

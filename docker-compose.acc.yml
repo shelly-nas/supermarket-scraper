@@ -29,6 +29,12 @@ services:
       # Emptied by the acc deploy on every run. Owned by uid 70.
       - ./data/postgres:/var/lib/postgresql/data
     restart: always
+    # Docker keeps the container log; rotated so it cannot fill the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   scraper-api:
     image: ${REGISTRY}/supermarket-scraper-api:${IMAGE_TAG:?IMAGE_TAG is required}
@@ -47,8 +53,12 @@ services:
       postgres:
         condition: service_healthy
     restart: always
-    volumes:
-      - ./logs:/app/logs
+    # Docker keeps the container log; rotated so it cannot fill the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - shelly-network
       - default
@@ -68,6 +78,12 @@ services:
     depends_on:
       - scraper-api
     restart: always
+    # Docker keeps the container log; rotated so it cannot fill the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - shelly-network
       - default

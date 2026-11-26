@@ -52,7 +52,7 @@ class AldiCatalogClient extends CatalogClient {
     // Only food and drink is kept from Aldi.
     const isFood = aldiFoodFilter(regular);
     const food = regular.filter(isFood);
-    scraperLogger.info(`Aldi catalog: ${regular.length - food.length} of ${regular.length} products skipped as non-food`);
+    scraperLogger.debug(`Aldi catalog: ${regular.length - food.length} of ${regular.length} products skipped as non-food`);
     const products = food.map(mapAldiProduct).filter((p): p is ICatalogProduct => p !== null);
     if (products.length === 0) throw new Error("Aldi: no catalog products with a price");
     scraperLogger.info(`Aldi catalog: ${products.length} products with a price`);

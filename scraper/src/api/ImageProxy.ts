@@ -86,7 +86,7 @@ export class ImageProxy {
       const response = await this.http.get<ArrayBuffer>(url);
       const contentType = String(response.headers["content-type"] ?? "").split(";")[0].trim();
       if (!contentType.startsWith("image/")) {
-        serverLogger.warn(`Image proxy: ${url} is ${contentType || "no image"}`);
+        serverLogger.debug(`Image proxy: ${url} is ${contentType || "no image"}`);
         return null;
       }
       const body = Buffer.from(response.data);
@@ -100,7 +100,7 @@ export class ImageProxy {
       }
       return { body, contentType, etag: `"${key}"` };
     } catch (error: any) {
-      serverLogger.warn(`Image proxy: ${url}: ${error?.response?.status ?? error?.message}`);
+      serverLogger.debug(`Image proxy: ${url}: ${error?.response?.status ?? error?.message}`);
       return null;
     }
   }

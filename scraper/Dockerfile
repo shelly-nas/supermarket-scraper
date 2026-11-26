@@ -26,9 +26,6 @@ RUN npm run build
 # Remove dev dependencies to reduce image size
 RUN npm prune --omit=dev
 
-# Create logs directory
-RUN mkdir -p logs
-
 # Expose the API port
 EXPOSE 3000
 

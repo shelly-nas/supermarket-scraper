@@ -1,22 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
-const post = vi.fn();
-vi.mock("axios", () => ({ default: { post: (...args: unknown[]) => post(...args) } }));
 vi.mock("node-cron", () => ({ default: { schedule: vi.fn(() => ({ stop: vi.fn() })) } }));
 vi.mock("../utils/Logger", () => ({
-  scraperLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  scraperLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), setSupermarket: vi.fn() },
   serverLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 import SchedulerService from "../services/SchedulerService";
-import { CatalogRunInProgressError } from "../services/CatalogService";
+import { RunInProgressError } from "../services/RunService";
 
-const flush = () => new Promise((resolve) => setImmediate(resolve));
-
-function setup(dueSupermarkets: string[], catalogStart: (sm: string) => Promise<{ runId: number; done: Promise<void> }>) {
-  const order: string[] = [];
+function setup(dueSupermarkets: string[], running: string[] = []) {
   const nextRuns: { supermarket: string; at: Date }[] = [];
   const scheduled = {
+    ensureScheduledRuns: vi.fn().mockResolvedValue(0),
     getDueScheduledRuns: vi.fn().mockResolvedValue(dueSupermarkets.map((supermarket) => ({ supermarket }))),
     updateNextRunTime: vi.fn(async (supermarket: string, at: Date) => {
       nextRuns.push({ supermarket, at });
@@ -27,82 +23,53 @@ function setup(dueSupermarkets: string[], catalogStart: (sm: string) => Promise<
     getDiscountController: () => ({ deactivateExpiredDiscounts: vi.fn().mockResolvedValue(0) }),
     getScheduledRunController: () => scheduled,
   };
-  const catalog = {
-    supportedSupermarkets: ["Albert Heijn", "Jumbo"],
-    start: vi.fn(async (sm: string) => {
-      order.push(`catalog ${sm}`);
-      return catalogStart(sm);
-    }),
+  const runService = {
+    isRunning: vi.fn((sm: string) => running.includes(sm)),
+    start: vi.fn(async (_sm: string) => ({ runId: 1, done: Promise.resolve() })),
   };
-  post.mockImplementation(async (url: string) => {
-    order.push(`offers ${url.split("/").pop()}`);
-    return { status: 200 };
-  });
-  const scheduler = new SchedulerService(dataManager as any, "3001", catalog as any);
+  const scheduler = new SchedulerService(dataManager as any, runService as any);
   const check = () => (scheduler as any).checkAndRunDueScrapers() as Promise<void>;
-  return { scheduler, check, order, nextRuns, catalog };
+  return { check, nextRuns, scheduled, runService };
 }
 
-describe("weekly run per supermarket", () => {
-  beforeEach(() => {
-    post.mockReset();
-    delete process.env.CATALOG_ENABLED;
-  });
-
-  it("runs the catalog first and the offers when it is done", async () => {
-    let finishCatalog!: () => void;
-    const { check, order } = setup(["Albert Heijn"], async () => ({
-      runId: 1,
-      done: new Promise<void>((resolve) => (finishCatalog = resolve)),
-    }));
-
+describe("scheduler", () => {
+  it("gives every supermarket a schedule row and asks for due runs with the 8-day safety net", async () => {
+    const { check, scheduled } = setup([]);
     await check();
-    await flush();
-    expect(order).toEqual(["catalog Albert Heijn"]);
-
-    finishCatalog();
-    await flush();
-    expect(order).toEqual(["catalog Albert Heijn", "offers albert-heijn"]);
+    expect(scheduled.ensureScheduledRuns).toHaveBeenCalledWith([
+      "Albert Heijn",
+      "Aldi",
+      "Dirk",
+      "Hoogvliet",
+      "Jumbo",
+      "Lidl",
+      "PLUS",
+    ]);
+    expect(scheduled.getDueScheduledRuns).toHaveBeenCalledWith(8, 3);
   });
 
-  it("sets a retry a few hours ahead before starting, in case the run fails", async () => {
+  it("sets a retry a few hours ahead, then starts the run of each due supermarket", async () => {
     const before = Date.now();
-    const { check, nextRuns } = setup(["Jumbo"], async () => ({ runId: 1, done: Promise.resolve() }));
+    const { check, nextRuns, runService } = setup(["Jumbo", "Lidl"]);
     await check();
-    expect(nextRuns).toHaveLength(1);
+    expect(runService.start.mock.calls.map((c) => c[0])).toEqual(["Jumbo", "Lidl"]);
+    expect(nextRuns.map((r) => r.supermarket)).toEqual(["Jumbo", "Lidl"]);
     const hours = (nextRuns[0].at.getTime() - before) / 3600000;
     expect(hours).toBeGreaterThan(2.9);
     expect(hours).toBeLessThan(3.1);
   });
 
-  it("still runs the offers when the catalog is already running or has no scraper", async () => {
-    const { check, order, catalog } = setup(["Jumbo", "Lidl"], async () => {
-      throw new CatalogRunInProgressError("busy");
-    });
-    await check();
-    await flush();
-    expect(catalog.start).toHaveBeenCalledTimes(1); // Lidl is not in supportedSupermarkets here
-    expect(order).toEqual(["catalog Jumbo", "offers lidl", "offers jumbo"]);
-  });
-
-  it("leaves out the catalog with CATALOG_ENABLED=false", async () => {
-    process.env.CATALOG_ENABLED = "false";
-    const { check, order, catalog } = setup(["Albert Heijn"], async () => ({ runId: 1, done: Promise.resolve() }));
-    await check();
-    await flush();
-    expect(catalog.start).not.toHaveBeenCalled();
-    expect(order).toEqual(["offers albert-heijn"]);
-  });
-
   it("does not start a supermarket again while its run is in progress", async () => {
-    const { check, order } = setup(["Albert Heijn"], async () => ({
-      runId: 1,
-      done: new Promise<void>(() => {}),
-    }));
+    const { check, runService, nextRuns } = setup(["Albert Heijn"], ["Albert Heijn"]);
     await check();
-    await flush();
+    expect(runService.start).not.toHaveBeenCalled();
+    expect(nextRuns).toHaveLength(1);
+  });
+
+  it("keeps going when a run is already in progress elsewhere", async () => {
+    const { check, runService } = setup(["Dirk", "Aldi"]);
+    runService.start.mockRejectedValueOnce(new RunInProgressError("busy"));
     await check();
-    await flush();
-    expect(order).toEqual(["catalog Albert Heijn"]);
+    expect(runService.start).toHaveBeenCalledTimes(2);
   });
 });

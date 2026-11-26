@@ -1,5 +1,6 @@
 import { AxiosInstance } from "axios";
-import CatalogClient from "./CatalogClient";
+import CatalogClient, { CatalogOffers } from "./CatalogClient";
+import { hasJumboPromotion, jumboOffers } from "../JumboApiClient";
 import { ICatalogProduct } from "../../interfaces/ICatalogProduct";
 import JumboGraphql, { JumboProduct, jumboProductUrl, jumboQuantity, unitPriceText } from "../jumbo/JumboGraphql";
 
@@ -39,11 +40,20 @@ class JumboCatalogClient extends CatalogClient {
     this.api = new JumboGraphql(http);
   }
 
+  /** Promoted products seen by the last fetchCatalog. */
+  private onPromotion: JumboProduct[] = [];
+
   async fetchCatalog(onPage: (products: ICatalogProduct[]) => Promise<void>): Promise<void> {
+    this.onPromotion = [];
     await this.api.forEachPage(async (products) => {
+      this.onPromotion.push(...products.filter(hasJumboPromotion));
       const mapped = products.map(mapJumboProduct).filter((p): p is ICatalogProduct => p !== null);
       if (mapped.length > 0) await onPage(mapped);
     });
+  }
+
+  catalogOffers(): CatalogOffers {
+    return jumboOffers(this.onPromotion);
   }
 }
 

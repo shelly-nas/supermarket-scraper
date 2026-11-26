@@ -12,6 +12,10 @@ export class ScraperRunModel {
   completedAt?: Date;
   durationSeconds?: number;
   promotionExpireDate?: Date;
+  /** Assortment step of the run; undefined when the run had none. */
+  catalogProducts?: number;
+  catalogPricesChanged?: number;
+  catalogProductsRemoved?: number;
 
   constructor(
     id: number,

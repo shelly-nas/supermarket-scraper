@@ -11,6 +11,9 @@ interface ScraperRunRow {
   products_created: number;
   discounts_deactivated: number;
   discounts_created: number;
+  catalog_products: number | null;
+  catalog_prices_changed: number | null;
+  catalog_products_removed: number | null;
   error_message: string | null;
   started_at: Date;
   completed_at: Date | null;
@@ -18,6 +21,47 @@ interface ScraperRunRow {
   promotion_expire_date: Date | null;
 }
 
+/** What a run did; the catalog fields stay null when the run had no assortment step. */
+export interface RunMetrics {
+  productsScraped: number;
+  productsUpdated: number;
+  productsCreated: number;
+  discountsDeactivated: number;
+  discountsCreated: number;
+  promotionExpireDate?: Date;
+  catalogProducts?: number;
+  catalogPricesChanged?: number;
+  catalogProductsRemoved?: number;
+}
+
+const RUN_COLUMNS = `id, supermarket, status, products_scraped, products_updated,
+  products_created, discounts_deactivated, discounts_created,
+  catalog_products, catalog_prices_changed, catalog_products_removed,
+  error_message, started_at, completed_at, duration_seconds, promotion_expire_date`;
+
+function toModel(row: ScraperRunRow): ScraperRunModel {
+  const run = new ScraperRunModel(
+    row.id,
+    row.supermarket,
+    row.status,
+    row.products_scraped,
+    row.products_updated,
+    row.products_created,
+    row.discounts_deactivated,
+    row.discounts_created,
+    row.error_message || undefined,
+    row.started_at,
+    row.completed_at || undefined,
+    row.duration_seconds || undefined,
+    row.promotion_expire_date || undefined
+  );
+  run.catalogProducts = row.catalog_products ?? undefined;
+  run.catalogPricesChanged = row.catalog_prices_changed ?? undefined;
+  run.catalogProductsRemoved = row.catalog_products_removed ?? undefined;
+  return run;
+}
+
+/** The scraper_runs table: one row per run of a supermarket (assortment and offers). */
 class PostgresScraperRunController {
   private db: PostgresDataContext;
 
@@ -31,8 +75,8 @@ class PostgresScraperRunController {
     try {
       const result = await this.db.query<{ exists: boolean }>(
         `SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
+          SELECT FROM information_schema.tables
+          WHERE table_schema = 'public'
           AND table_name = 'scraper_runs'
         )`
       );
@@ -43,306 +87,110 @@ class PostgresScraperRunController {
     }
   }
 
-  async createRun(supermarket: string): Promise<number> {
-    scraperLogger.debug(`Creating new scraper run for: ${supermarket}`);
-    try {
-      const result = await this.db.query<{ id: number }>(
-        `INSERT INTO scraper_runs (supermarket, status, started_at) 
-         VALUES ($1, 'running', NOW()) 
-         RETURNING id`,
-        [supermarket]
-      );
-
-      const runId = result.rows[0].id;
-      scraperLogger.info(`Scraper run created with ID: ${runId}`);
-      return runId;
-    } catch (error) {
-      scraperLogger.error(
-        `Error creating scraper run for ${supermarket}`,
-        error
-      );
-      throw error;
-    }
+  async createRun(supermarket: string): Promise<{ id: number; startedAt: Date }> {
+    const result = await this.db.query<{ id: number; started_at: Date }>(
+      `INSERT INTO scraper_runs (supermarket, status, started_at)
+       VALUES ($1, 'running', NOW())
+       RETURNING id, started_at`,
+      [supermarket]
+    );
+    const row = result.rows[0];
+    scraperLogger.debug(`Scraper run created with ID: ${row.id}`);
+    return { id: row.id, startedAt: row.started_at };
   }
 
-  async updateRunSuccess(
+  /** Closes a run as success or failed, with what it did up to then. */
+  async finishRun(
     runId: number,
-    metrics: {
-      productsScraped: number;
-      productsUpdated: number;
-      productsCreated: number;
-      discountsDeactivated: number;
-      discountsCreated: number;
-      promotionExpireDate?: Date;
-    }
+    outcome: { status: "success" | "failed"; errorMessage?: string; metrics: RunMetrics }
   ): Promise<void> {
-    scraperLogger.debug(`Updating scraper run ${runId} to success`);
-    try {
-      await this.db.query(
-        `UPDATE scraper_runs 
-         SET status = 'success',
-             products_scraped = $2,
-             products_updated = $3,
-             products_created = $4,
-             discounts_deactivated = $5,
-             discounts_created = $6,
-             promotion_expire_date = $7,
-             completed_at = NOW(),
-             duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
-         WHERE id = $1`,
-        [
-          runId,
-          metrics.productsScraped,
-          metrics.productsUpdated,
-          metrics.productsCreated,
-          metrics.discountsDeactivated,
-          metrics.discountsCreated,
-          metrics.promotionExpireDate || null,
-        ]
-      );
-      scraperLogger.info(`Scraper run ${runId} marked as success`);
-    } catch (error) {
-      scraperLogger.error(
-        `Error updating scraper run ${runId} to success`,
-        error
-      );
-      throw error;
-    }
+    const m = outcome.metrics;
+    await this.db.query(
+      `UPDATE scraper_runs
+       SET status = $2,
+           error_message = $3,
+           products_scraped = $4,
+           products_updated = $5,
+           products_created = $6,
+           discounts_deactivated = $7,
+           discounts_created = $8,
+           promotion_expire_date = $9,
+           catalog_products = $10,
+           catalog_prices_changed = $11,
+           catalog_products_removed = $12,
+           completed_at = NOW(),
+           duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
+       WHERE id = $1`,
+      [
+        runId,
+        outcome.status,
+        outcome.errorMessage ?? null,
+        m.productsScraped,
+        m.productsUpdated,
+        m.productsCreated,
+        m.discountsDeactivated,
+        m.discountsCreated,
+        m.promotionExpireDate ?? null,
+        m.catalogProducts ?? null,
+        m.catalogPricesChanged ?? null,
+        m.catalogProductsRemoved ?? null,
+      ]
+    );
+    scraperLogger.debug(`Scraper run ${runId} marked as ${outcome.status}`);
   }
 
-  async updateRunFailure(runId: number, errorMessage: string): Promise<void> {
-    scraperLogger.debug(`Updating scraper run ${runId} to failed`);
-    try {
-      await this.db.query(
-        `UPDATE scraper_runs 
-         SET status = 'failed',
-             error_message = $2,
-             completed_at = NOW(),
-             duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
-         WHERE id = $1`,
-        [runId, errorMessage]
-      );
-      scraperLogger.info(`Scraper run ${runId} marked as failed`);
-    } catch (error) {
-      scraperLogger.error(
-        `Error updating scraper run ${runId} to failed`,
-        error
-      );
-      throw error;
-    }
+  /** Runs left 'running' by a crash or restart are closed as failed on startup. */
+  async failInterruptedRuns(): Promise<number> {
+    const result = await this.db.query(
+      `UPDATE scraper_runs SET status = 'failed', completed_at = NOW(),
+         duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER,
+         error_message = 'Interrupted (server restarted)'
+       WHERE status = 'running'`
+    );
+    return result.rowCount ?? 0;
   }
 
   async getRunById(runId: number): Promise<ScraperRunModel | null> {
-    scraperLogger.debug(`Fetching scraper run with ID: ${runId}`);
-    try {
-      const result = await this.db.query<ScraperRunRow>(
-        `SELECT id, supermarket, status, products_scraped, products_updated, 
-                products_created, discounts_deactivated, discounts_created,
-                error_message, started_at, completed_at, duration_seconds, promotion_expire_date
-         FROM scraper_runs 
-         WHERE id = $1`,
-        [runId]
-      );
-
-      if (result.rows.length === 0) {
-        return null;
-      }
-
-      const row = result.rows[0];
-      return new ScraperRunModel(
-        row.id,
-        row.supermarket,
-        row.status,
-        row.products_scraped,
-        row.products_updated,
-        row.products_created,
-        row.discounts_deactivated,
-        row.discounts_created,
-        row.error_message || undefined,
-        row.started_at,
-        row.completed_at || undefined,
-        row.duration_seconds || undefined,
-        row.promotion_expire_date || undefined
-      );
-    } catch (error) {
-      scraperLogger.error(`Error fetching scraper run ${runId}`, error);
-      throw error;
-    }
+    const result = await this.db.query<ScraperRunRow>(
+      `SELECT ${RUN_COLUMNS} FROM scraper_runs WHERE id = $1`,
+      [runId]
+    );
+    return result.rows.length > 0 ? toModel(result.rows[0]) : null;
   }
 
   async getAllRuns(limit: number = 100): Promise<ScraperRunModel[]> {
-    scraperLogger.debug(`Fetching last ${limit} scraper runs`);
-    try {
-      const result = await this.db.query<ScraperRunRow>(
-        `SELECT id, supermarket, status, products_scraped, products_updated, 
-                products_created, discounts_deactivated, discounts_created,
-                error_message, started_at, completed_at, duration_seconds, promotion_expire_date
-         FROM scraper_runs 
-         ORDER BY started_at DESC
-         LIMIT $1`,
-        [limit]
-      );
-
-      return result.rows.map(
-        (row) =>
-          new ScraperRunModel(
-            row.id,
-            row.supermarket,
-            row.status,
-            row.products_scraped,
-            row.products_updated,
-            row.products_created,
-            row.discounts_deactivated,
-            row.discounts_created,
-            row.error_message || undefined,
-            row.started_at,
-            row.completed_at || undefined,
-            row.duration_seconds || undefined,
-            row.promotion_expire_date || undefined
-          )
-      );
-    } catch (error) {
-      scraperLogger.error("Error fetching scraper runs", error);
-      throw error;
-    }
-  }
-
-  async getRunsBySupermarket(
-    supermarket: string,
-    limit: number = 50
-  ): Promise<ScraperRunModel[]> {
-    scraperLogger.debug(
-      `Fetching last ${limit} scraper runs for ${supermarket}`
+    const result = await this.db.query<ScraperRunRow>(
+      `SELECT ${RUN_COLUMNS} FROM scraper_runs ORDER BY started_at DESC LIMIT $1`,
+      [limit]
     );
-    try {
-      const result = await this.db.query<ScraperRunRow>(
-        `SELECT id, supermarket, status, products_scraped, products_updated, 
-                products_created, discounts_deactivated, discounts_created,
-                error_message, started_at, completed_at, duration_seconds, promotion_expire_date
-         FROM scraper_runs 
-         WHERE supermarket = $1
-         ORDER BY started_at DESC
-         LIMIT $2`,
-        [supermarket, limit]
-      );
-
-      return result.rows.map(
-        (row) =>
-          new ScraperRunModel(
-            row.id,
-            row.supermarket,
-            row.status,
-            row.products_scraped,
-            row.products_updated,
-            row.products_created,
-            row.discounts_deactivated,
-            row.discounts_created,
-            row.error_message || undefined,
-            row.started_at,
-            row.completed_at || undefined,
-            row.duration_seconds || undefined,
-            row.promotion_expire_date || undefined
-          )
-      );
-    } catch (error) {
-      scraperLogger.error(
-        `Error fetching scraper runs for ${supermarket}`,
-        error
-      );
-      throw error;
-    }
+    return result.rows.map(toModel);
   }
 
-  async getLastRunBySupermarket(
-    supermarket: string
-  ): Promise<ScraperRunModel | null> {
-    scraperLogger.debug(`Fetching last scraper run for ${supermarket}`);
-    try {
-      const result = await this.db.query<ScraperRunRow>(
-        `SELECT id, supermarket, status, products_scraped, products_updated, 
-                products_created, discounts_deactivated, discounts_created,
-                error_message, started_at, completed_at, duration_seconds, promotion_expire_date
-         FROM scraper_runs 
-         WHERE supermarket = $1
-         ORDER BY started_at DESC
-         LIMIT 1`,
-        [supermarket]
-      );
-
-      if (result.rows.length === 0) {
-        return null;
-      }
-
-      const row = result.rows[0];
-      return new ScraperRunModel(
-        row.id,
-        row.supermarket,
-        row.status,
-        row.products_scraped,
-        row.products_updated,
-        row.products_created,
-        row.discounts_deactivated,
-        row.discounts_created,
-        row.error_message || undefined,
-        row.started_at,
-        row.completed_at || undefined,
-        row.duration_seconds || undefined,
-        row.promotion_expire_date || undefined
-      );
-    } catch (error) {
-      scraperLogger.error(
-        `Error fetching last scraper run for ${supermarket}`,
-        error
-      );
-      throw error;
-    }
-  }
-
-  async getLastSuccessfulRunBySupermarket(
-    supermarket: string
-  ): Promise<ScraperRunModel | null> {
-    scraperLogger.debug(
-      `Fetching last successful scraper run for ${supermarket}`
+  async getRunsBySupermarket(supermarket: string, limit: number = 50): Promise<ScraperRunModel[]> {
+    const result = await this.db.query<ScraperRunRow>(
+      `SELECT ${RUN_COLUMNS} FROM scraper_runs
+       WHERE supermarket = $1 ORDER BY started_at DESC LIMIT $2`,
+      [supermarket, limit]
     );
-    try {
-      const result = await this.db.query<ScraperRunRow>(
-        `SELECT id, supermarket, status, products_scraped, products_updated, 
-                products_created, discounts_deactivated, discounts_created,
-                error_message, started_at, completed_at, duration_seconds, promotion_expire_date
-         FROM scraper_runs 
-         WHERE supermarket = $1 AND status = 'success'
-         ORDER BY started_at DESC
-         LIMIT 1`,
-        [supermarket]
-      );
+    return result.rows.map(toModel);
+  }
 
-      if (result.rows.length === 0) {
-        return null;
-      }
+  async getLastRunBySupermarket(supermarket: string): Promise<ScraperRunModel | null> {
+    const result = await this.db.query<ScraperRunRow>(
+      `SELECT ${RUN_COLUMNS} FROM scraper_runs
+       WHERE supermarket = $1 ORDER BY started_at DESC LIMIT 1`,
+      [supermarket]
+    );
+    return result.rows.length > 0 ? toModel(result.rows[0]) : null;
+  }
 
-      const row = result.rows[0];
-      return new ScraperRunModel(
-        row.id,
-        row.supermarket,
-        row.status,
-        row.products_scraped,
-        row.products_updated,
-        row.products_created,
-        row.discounts_deactivated,
-        row.discounts_created,
-        row.error_message || undefined,
-        row.started_at,
-        row.completed_at || undefined,
-        row.duration_seconds || undefined,
-        row.promotion_expire_date || undefined
-      );
-    } catch (error) {
-      scraperLogger.error(
-        `Error fetching last successful scraper run for ${supermarket}`,
-        error
-      );
-      throw error;
-    }
+  async getLastSuccessfulRunBySupermarket(supermarket: string): Promise<ScraperRunModel | null> {
+    const result = await this.db.query<ScraperRunRow>(
+      `SELECT ${RUN_COLUMNS} FROM scraper_runs
+       WHERE supermarket = $1 AND status = 'success' ORDER BY started_at DESC LIMIT 1`,
+      [supermarket]
+    );
+    return result.rows.length > 0 ? toModel(result.rows[0]) : null;
   }
 
   async getRunStats(): Promise<{
@@ -351,37 +199,30 @@ class PostgresScraperRunController {
     failedRuns: number;
     successRate: number;
   }> {
-    scraperLogger.debug("Fetching scraper run statistics");
-    try {
-      const result = await this.db.query<{
-        total_runs: string;
-        successful_runs: string;
-        failed_runs: string;
-      }>(
-        `SELECT 
-          COUNT(*) as total_runs,
-          COUNT(*) FILTER (WHERE status = 'success') as successful_runs,
-          COUNT(*) FILTER (WHERE status = 'failed') as failed_runs
-         FROM scraper_runs`
-      );
+    const result = await this.db.query<{
+      total_runs: string;
+      successful_runs: string;
+      failed_runs: string;
+    }>(
+      `SELECT
+        COUNT(*) as total_runs,
+        COUNT(*) FILTER (WHERE status = 'success') as successful_runs,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed_runs
+       FROM scraper_runs`
+    );
 
-      const row = result.rows[0];
-      const totalRuns = parseInt(row.total_runs, 10);
-      const successfulRuns = parseInt(row.successful_runs, 10);
-      const failedRuns = parseInt(row.failed_runs, 10);
-      const successRate =
-        totalRuns > 0 ? (successfulRuns / totalRuns) * 100 : 0;
+    const row = result.rows[0];
+    const totalRuns = parseInt(row.total_runs, 10);
+    const successfulRuns = parseInt(row.successful_runs, 10);
+    const failedRuns = parseInt(row.failed_runs, 10);
+    const successRate = totalRuns > 0 ? (successfulRuns / totalRuns) * 100 : 0;
 
-      return {
-        totalRuns,
-        successfulRuns,
-        failedRuns,
-        successRate: Math.round(successRate * 100) / 100,
-      };
-    } catch (error) {
-      scraperLogger.error("Error fetching scraper run statistics", error);
-      throw error;
-    }
+    return {
+      totalRuns,
+      successfulRuns,
+      failedRuns,
+      successRate: Math.round(successRate * 100) / 100,
+    };
   }
 }
 
