@@ -51,6 +51,22 @@ export function mapHoogvlietDiscount(
 
 export { folderExpireDate };
 
+/** The discounts among a page of Hoogvliet products. */
+export function hoogvlietDiscounts(products: HoogvlietListedProduct[]): IProductDiscountDetails[] {
+  return products
+    .map((product) => mapHoogvlietDiscount(product))
+    .filter((d): d is IProductDiscountDetails => d !== null);
+}
+
+/** Hoogvliet's offers with the most common end date as run expiry; shared with the catalog run. */
+export function hoogvlietOffers(
+  discounts: IProductDiscountDetails[]
+): { discounts: IProductDiscountDetails[]; expireDate: string } {
+  const expireDate = folderExpireDate(discounts);
+  scraperLogger.info(`Total Hoogvliet discounts: ${discounts.length}, folder expires: ${expireDate}`);
+  return { discounts, expireDate };
+}
+
 class HoogvlietApiClient extends ApiClient {
   public name = "Hoogvliet";
 
@@ -70,15 +86,9 @@ class HoogvlietApiClient extends ApiClient {
 
     const discounts: IProductDiscountDetails[] = [];
     await this.api.forEachCategory(async (products) => {
-      for (const product of products) {
-        const discount = mapHoogvlietDiscount(product);
-        if (discount) discounts.push(discount);
-      }
+      discounts.push(...hoogvlietDiscounts(products));
     });
-
-    const expireDate = folderExpireDate(discounts);
-    scraperLogger.info(`Total Hoogvliet discounts: ${discounts.length}, folder expires: ${expireDate}`);
-    return { discounts, expireDate };
+    return hoogvlietOffers(discounts);
   }
 }
 

@@ -14,6 +14,27 @@ import PlusSite, {
 } from "./plus/PlusSite";
 
 /**
+ * The offers among PLUS products with the most common end date as run expiry.
+ * Shared by the offers run (products on offer) and the catalog run (all
+ * products; the ones without a promotion map to null).
+ */
+export function plusOffers(
+  products: PlusProduct[],
+  now: Date = new Date()
+): { discounts: IProductDiscountDetails[]; expireDate: string } {
+  const discounts = products
+    .map((product) => mapPlusDiscount(product, now))
+    .filter((d): d is IProductDiscountDetails => d !== null);
+  if (discounts.length === 0) throw new Error("PLUS: no discounts found");
+
+  const expireDate = folderExpireDate(discounts);
+  scraperLogger.info(
+    `Total PLUS discounts: ${discounts.length} of ${products.length} products, folder expires: ${expireDate}`
+  );
+  return { discounts, expireDate };
+}
+
+/**
  * Maps a product on offer to a discount, linked by its SKU; null for labels
  * that are not about the price ("Gratis bezorging bij 10.00 euro"). The price
  * per item comes from NewPrice when PLUS gives one, else from the label
@@ -80,17 +101,7 @@ class PlusApiClient extends ApiClient {
       await site.close();
     }
 
-    const now = new Date();
-    const discounts = onOffer
-      .map((product) => mapPlusDiscount(product, now))
-      .filter((d): d is IProductDiscountDetails => d !== null);
-    if (discounts.length === 0) throw new Error("PLUS: no discounts found");
-
-    const expireDate = folderExpireDate(discounts);
-    scraperLogger.info(
-      `Total PLUS discounts: ${discounts.length} of ${onOffer.length} products on offer, folder expires: ${expireDate}`
-    );
-    return { discounts, expireDate };
+    return plusOffers(onOffer);
   }
 }
 

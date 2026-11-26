@@ -11,21 +11,6 @@ export interface CatalogBatchMetrics {
   pricesChanged: number;
 }
 
-export interface CatalogRunRow {
-  id: number;
-  supermarket: string;
-  status: string;
-  products_seen: number;
-  products_created: number;
-  products_updated: number;
-  prices_changed: number;
-  products_removed: number;
-  error_message: string | null;
-  started_at: Date;
-  completed_at: Date | null;
-  duration_seconds: number | null;
-}
-
 /** How long a regular price the supermarket itself showed beats an outside dataset. */
 export const OBSERVED_PRICE_MAX_AGE_DAYS = 180;
 
@@ -234,57 +219,6 @@ class PostgresCatalogController {
       [supermarket, runStartedAt]
     );
     return result.rowCount ?? 0;
-  }
-
-  async createRun(supermarket: string): Promise<{ id: number; startedAt: Date }> {
-    const result = await this.db.query<{ id: number; started_at: Date }>(
-      `INSERT INTO catalog_runs (supermarket, status) VALUES ($1, 'running')
-       RETURNING id, started_at`,
-      [supermarket]
-    );
-    return { id: result.rows[0].id, startedAt: result.rows[0].started_at };
-  }
-
-  async completeRun(
-    id: number,
-    metrics: { seen: number; created: number; updated: number; pricesChanged: number; removed: number }
-  ): Promise<void> {
-    await this.db.query(
-      `UPDATE catalog_runs SET status = 'success', products_seen = $2,
-         products_created = $3, products_updated = $4, prices_changed = $5,
-         products_removed = $6, completed_at = NOW(),
-         duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::int
-       WHERE id = $1`,
-      [id, metrics.seen, metrics.created, metrics.updated, metrics.pricesChanged, metrics.removed]
-    );
-  }
-
-  async failRun(id: number, message: string, seen: number): Promise<void> {
-    await this.db.query(
-      `UPDATE catalog_runs SET status = 'failed', error_message = $2,
-         products_seen = $3, completed_at = NOW(),
-         duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::int
-       WHERE id = $1`,
-      [id, message, seen]
-    );
-  }
-
-  /** Runs left 'running' by a crash or restart are closed as failed on startup. */
-  async failStaleRuns(): Promise<number> {
-    const result = await this.db.query(
-      `UPDATE catalog_runs SET status = 'failed', completed_at = NOW(),
-         error_message = 'Interrupted (server restarted)'
-       WHERE status = 'running'`
-    );
-    return result.rowCount ?? 0;
-  }
-
-  async getRuns(limit: number): Promise<CatalogRunRow[]> {
-    const result = await this.db.query<CatalogRunRow>(
-      "SELECT * FROM catalog_runs ORDER BY started_at DESC LIMIT $1",
-      [limit]
-    );
-    return result.rows;
   }
 }
 

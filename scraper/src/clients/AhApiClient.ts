@@ -71,6 +71,28 @@ export function ahBonusPrice(product: AhProduct, regular: number, quantity: Quan
 }
 
 /**
+ * The offers among AH products with a bonus, one per product, with the most
+ * common end date as run expiry. Shared by the offers run and the catalog
+ * run, which sees the same products.
+ */
+export function ahOffers(
+  products: AhProduct[],
+  now: Date = new Date()
+): { discounts: IProductDiscountDetails[]; expireDate: string } {
+  const discounts = new Map<string, IProductDiscountDetails>();
+  for (const product of products) {
+    const discount = mapAhDiscount(product, now);
+    if (discount && !discounts.has(discount.externalId!)) discounts.set(discount.externalId!, discount);
+  }
+  const result = Array.from(discounts.values());
+  const expireDate = folderExpireDate(result);
+  scraperLogger.info(
+    `Total Albert Heijn bonus products: ${result.length} of ${products.length} with any bonus, expire: ${expireDate}`
+  );
+  return { discounts: result, expireDate };
+}
+
+/**
  * Maps one product with a bonus to a discount; null when it is not part of
  * the weekly bonus in the stores (online-only, Etos, Gall & Gall, webshop
  * deals, standing volume discounts), has ended, or has no usable price.
@@ -140,27 +162,14 @@ class AhApiClient extends ApiClient {
     const categories = await this.api.categories();
     if (categories.length === 0) throw new Error("AH: no product categories returned");
 
-    const now = new Date();
-    const discounts = new Map<string, IProductDiscountDetails>();
-    let seen = 0;
-
+    const bonus: AhProduct[] = [];
     for (const category of categories) {
       await this.api.walkCategory(category.id, PAGE_SIZE, true, async (products) => {
-        for (const product of products) {
-          seen++;
-          const discount = mapAhDiscount(product, now);
-          if (discount && !discounts.has(discount.externalId!)) discounts.set(discount.externalId!, discount);
-        }
+        bonus.push(...products);
       });
-      scraperLogger.info(`AH bonus: '${category.name}' done, ${discounts.size} bonus products so far`);
+      scraperLogger.info(`AH bonus: '${category.name}' done, ${bonus.length} products with a bonus so far`);
     }
-
-    const result = Array.from(discounts.values());
-    const expireDate = folderExpireDate(result);
-    scraperLogger.info(
-      `Total Albert Heijn bonus products: ${result.length} of ${seen} with any bonus, expire: ${expireDate}`
-    );
-    return { discounts: result, expireDate };
+    return ahOffers(bonus);
   }
 }
 

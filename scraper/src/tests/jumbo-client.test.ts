@@ -140,6 +140,24 @@ describe("Jumbo catalog client", () => {
     expect(pages.flat().map((p) => p.externalId)).toEqual(["a", "b", "c", "e"]);
   });
 
+  it("keeps the offers it saw on the way, so one run fetches both", async () => {
+    const all = [product("a", { promotions: [promo(["3 voor 6,00"])] }), product("b")];
+    const http = {
+      post: vi.fn().mockResolvedValue({ data: { data: { searchProducts: { count: all.length, products: all } } } }),
+    };
+    const client = new JumboCatalogClient(http as any);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      await client.fetchCatalog(async () => {});
+      const { discounts, expireDate } = client.catalogOffers();
+      expect(discounts.map((d) => d.externalId)).toEqual(["a"]);
+      expect(expireDate).toBe(FOLDER_END);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not retry GraphQL errors", async () => {
     const http = { post: vi.fn().mockResolvedValue({ data: { errors: [{ message: "No client headers set" }] } }) };
     await expect(new JumboGraphql(http as any).forEachPage(async () => {})).rejects.toThrow(

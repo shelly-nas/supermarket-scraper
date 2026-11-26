@@ -6,8 +6,8 @@ import SchedulerService from "./services/SchedulerService";
 import routes from "./api/Routes";
 import { runMigrations } from "./data/Migrations";
 import publicRoutes from "./api/PublicRoutes";
-import { createCatalogRoutes } from "./api/CatalogRoutes";
-import CatalogService from "./services/CatalogService";
+import { createRunRoutes } from "./api/RunRoutes";
+import RunService from "./services/RunService";
 
 
 const app: Application = express();
@@ -60,14 +60,14 @@ async function initializeDatabase(): Promise<boolean> {
   // Don't close the pool - it's a singleton that should stay open
 }
 
-// Full catalog scrapes (regular prices), shared by the admin routes and the scheduler
-const catalogService = new CatalogService(new PostgresDataManager().db);
+// Runs (assortment and offers per supermarket), shared by the admin route and the scheduler
+const runService = new RunService(new PostgresDataManager());
 
 // Register API routes
 // Public read-only API for consumer apps (Baskit)
 app.use("/api/public/v1", publicRoutes);
-// Catalog admin endpoints (status, runs, manual trigger)
-app.use("/api/catalog", createCatalogRoutes(catalogService, new PostgresDataManager().db));
+// Starting a run by hand
+app.use("/api/scraper", createRunRoutes(runService));
 // Admin API used by the management web frontend
 app.use("/api", routes);
 
@@ -90,9 +90,9 @@ async function startServer() {
     process.exit(1);
   }
 
-  const staleCatalogRuns = await catalogService.getController().failStaleRuns();
-  if (staleCatalogRuns > 0) {
-    serverLogger.warn(`Marked ${staleCatalogRuns} interrupted catalog run(s) as failed`);
+  const interrupted = await new PostgresDataManager().getScraperRunController().failInterruptedRuns();
+  if (interrupted > 0) {
+    serverLogger.warn(`Marked ${interrupted} interrupted run(s) as failed`);
   }
 
   app.listen(PORT, () => {
@@ -104,7 +104,7 @@ async function startServer() {
 
     // Start the scheduler service
     const dataManager = new PostgresDataManager();
-    const scheduler = new SchedulerService(dataManager, PORT.toString(), catalogService);
+    const scheduler = new SchedulerService(dataManager, runService);
     scheduler.start();
     serverLogger.info("Automated scheduler service initialized");
   });

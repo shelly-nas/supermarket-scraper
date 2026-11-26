@@ -1,5 +1,6 @@
 import { AxiosInstance } from "axios";
-import CatalogClient from "./CatalogClient";
+import CatalogClient, { CatalogOffers } from "./CatalogClient";
+import { hoogvlietDiscounts, hoogvlietOffers } from "../HoogvlietApiClient";
 import { ICatalogProduct } from "../../interfaces/ICatalogProduct";
 import HoogvlietGraphql, {
   HoogvlietListedProduct,
@@ -43,13 +44,22 @@ class HoogvlietCatalogClient extends CatalogClient {
     this.api = new HoogvlietGraphql(http);
   }
 
+  /** Discounts seen by the last fetchCatalog. */
+  private discounts: IProductDiscountDetails[] = [];
+
   async fetchCatalog(onPage: (products: ICatalogProduct[]) => Promise<void>): Promise<void> {
+    this.discounts = [];
     await this.api.forEachCategory(async (products) => {
+      this.discounts.push(...hoogvlietDiscounts(products));
       const mapped = products
         .map(mapHoogvlietProduct)
         .filter((p): p is ICatalogProduct => p !== null);
       if (mapped.length > 0) await onPage(mapped);
     });
+  }
+
+  catalogOffers(): CatalogOffers {
+    return hoogvlietOffers(this.discounts);
   }
 }
 

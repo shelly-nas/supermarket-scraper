@@ -11,7 +11,7 @@ The full assortment at regular price, per supermarket. Part of the [functional d
 | FR-007.3 | System SHALL record a price history row only when a regular price changes                             | MEDIUM   | ✅ Implemented |
 | FR-007.4 | System SHALL mark products missing from a run as not in the catalog, unless the run saw under 50% of the known products | MEDIUM | ✅ Implemented |
 | FR-007.5 | System SHALL run each supermarket's catalog scrape in its weekly auto run, right before its offers run (FR-003.9), and on demand from the admin UI; `CATALOG_ENABLED=false` leaves the catalog step out | MEDIUM | ✅ Implemented |
-| FR-007.6 | System SHALL track every catalog run (status, counts, duration, error) in `catalog_runs`             | MEDIUM   | ✅ Implemented |
+| FR-007.6 | System SHALL track the assortment step of every run (products, price changes, removed, error) on its `scraper_runs` row; the assortment and the offers are one run per supermarket (FR-003.9). `catalog_runs` keeps the history of the separate catalog runs before | MEDIUM   | ✅ Implemented |
 | FR-007.7 | System SHALL apply schema migrations from `scraper/migrations` on startup                              | HIGH     | ✅ Implemented |
 | FR-007.8 | Catalog clients for Dirk, PLUS and Aldi                                                                | MEDIUM   | ✅ Implemented |
 | FR-007.10 | System SHALL store each catalog product's pack quantity normalised to kg, l or stuk (`quantity_value`, `quantity_unit`; supplied by the client or read from the pack size such as "500 g", "6 x 330 ml", "4 stuks") and expose `pricePerUnit` (current price / quantity) in the public API | HIGH | ✅ Implemented |

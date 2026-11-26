@@ -6,7 +6,7 @@ interface ScheduledRunRow {
   id: number;
   supermarket: string;
   next_run_at: Date;
-  promotion_expire_date: Date;
+  promotion_expire_date: Date | null;
   enabled: boolean;
   created_at: Date;
   updated_at: Date;
@@ -170,14 +170,43 @@ class PostgresScheduledRunController {
     }
   }
 
-  async getDueScheduledRuns(): Promise<ScheduledRunModel[]> {
+  /**
+   * Gives every supermarket a schedule row, due right away, so a supermarket
+   * that never had a successful run (an empty database) still gets one.
+   */
+  async ensureScheduledRuns(supermarkets: string[]): Promise<number> {
+    const result = await this.db.query(
+      `INSERT INTO scheduled_runs (supermarket, next_run_at, promotion_expire_date, enabled)
+       SELECT name, NOW(), NULL, true FROM unnest($1::text[]) AS name
+       ON CONFLICT (supermarket) DO NOTHING`,
+      [supermarkets]
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /**
+   * Enabled supermarkets whose run is due: at their next run time, or as a
+   * fallback when their last successful run is older than `staleDays` (or
+   * there never was one) and no run started in the last `retryHours`, so a
+   * schedule that went wrong cannot leave the data stale.
+   */
+  async getDueScheduledRuns(staleDays: number, retryHours: number): Promise<ScheduledRunModel[]> {
     scraperLogger.debug("Fetching due scheduled runs");
     try {
       const result = await this.db.query<ScheduledRunRow>(
-        `SELECT id, supermarket, next_run_at, promotion_expire_date, enabled, created_at, updated_at
-         FROM scheduled_runs 
-         WHERE enabled = true AND next_run_at <= NOW()
-         ORDER BY next_run_at ASC`
+        `SELECT s.id, s.supermarket, s.next_run_at, s.promotion_expire_date, s.enabled, s.created_at, s.updated_at
+         FROM scheduled_runs s
+         WHERE s.enabled = true AND (
+           s.next_run_at <= NOW()
+           OR (
+             NOT EXISTS (SELECT 1 FROM scraper_runs r WHERE r.supermarket = s.supermarket
+                         AND r.status = 'success' AND r.started_at > NOW() - make_interval(days => $1))
+             AND NOT EXISTS (SELECT 1 FROM scraper_runs r WHERE r.supermarket = s.supermarket
+                             AND r.started_at > NOW() - make_interval(hours => $2))
+           )
+         )
+         ORDER BY s.next_run_at ASC`,
+        [staleDays, retryHours]
       );
 
       return result.rows.map(

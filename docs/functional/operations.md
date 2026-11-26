@@ -79,7 +79,7 @@ Monitoring, non-functional requirements, integration, deployment and configurati
 sequenceDiagram
     participant S as Scheduler Service
     participant API as REST API
-    participant SC as Scraper Client
+    participant SC as Run service and clients
     participant EXT as External Website
     participant DB as PostgreSQL
     participant WEB as Web Interface
@@ -92,17 +92,14 @@ sequenceDiagram
     DB-->>S: List of due runs
 
     alt Has due runs
-        S->>API: POST /api/scraper/run/:supermarket
-        API->>DB: Create scraper_run (running)
-        API->>SC: Initialize scraper
-        SC->>EXT: Navigate & scrape
-        EXT-->>SC: HTML content
-        SC->>SC: Parse products & discounts
-        SC->>DB: Upsert products
-        SC->>DB: Create/deactivate discounts
-        SC->>DB: Update scraper_run (success)
+        S->>SC: Start the run (background)
+        SC->>DB: Create scraper_run (running)
+        SC->>EXT: Fetch the full assortment (and the offers with it, or from the offers source)
+        EXT-->>SC: Products and promotions
+        SC->>DB: Upsert assortment products
+        SC->>DB: Upsert offer products, create discounts
+        SC->>DB: Update scraper_run (success or failed)
         SC->>DB: Schedule next run
-        API-->>S: 200 OK
     end
 
     Note over USER: Meanwhile...

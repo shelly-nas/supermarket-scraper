@@ -168,7 +168,7 @@ flowchart TD
 | FR-005.7  | System SHALL display default sorting by expiration, category, name | MEDIUM   | ✅ Implemented |
 | FR-005.8  | System SHALL provide Configurations dashboard                      | MEDIUM   | ✅ Implemented |
 | FR-005.9  | System SHALL display KPIs (runs, success rate, products)           | MEDIUM   | ✅ Implemented |
-| FR-005.10 | System SHALL provide manual scraper trigger buttons in two sections: "Weekly offers" (current discounts, "Run offers", with an "Auto re-scrape" switch) and "Full assortment" (catalog at regular price, "Run catalog") | MEDIUM | ✅ Implemented |
+| FR-005.10 | System SHALL provide one "Run" button per supermarket in the "Supermarkets" section, which starts a run of the full assortment and the offers in the background, with an "Auto run" switch; each card shows the products in the assortment and with an offer. The run log shows per run the assortment counts, the offer counts and the error of a failed step | MEDIUM | ✅ Implemented |
 | FR-005.11 | System SHALL display scraper run logs with pagination              | MEDIUM   | ✅ Implemented |
 | FR-005.12 | System SHALL follow the shelly-nas design guidelines (`shelly-fundamentals`, skill `design-richtlijnen`): Figtree, color roles from `tokens.css`, components from `components.css`, status as dot plus word | LOW | ✅ Implemented |
 | FR-005.13 | System SHALL be responsive for mobile devices                      | LOW      | ✅ Implemented |

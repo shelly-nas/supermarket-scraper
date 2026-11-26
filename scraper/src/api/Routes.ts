@@ -1,8 +1,7 @@
 import { Request, Response, Router } from "express";
-import { serverLogger, scraperLogger } from "../utils/Logger";
+import { serverLogger } from "../utils/Logger";
 import PostgresDataManager from "../data/PostgresDataManager";
-import { getSupermarketClient } from "../utils/ConfigHelper";
-import { nextRunAfterExpiry, TIME_ZONE } from "../utils/Schedule";
+import { RETRY_HOURS, STALE_AFTER_DAYS, TIME_ZONE } from "../utils/Schedule";
 
 const router = Router();
 
@@ -110,6 +109,9 @@ router.get("/dashboard/statuses", async (req: Request, res: Response) => {
     `;
 
     const result = await dbContext.query(query);
+    const catalogCounts = await dbContext.query(
+      `SELECT supermarket, COUNT(*) AS count FROM products WHERE in_catalog = true GROUP BY supermarket`
+    );
 
     // Map supermarket names to keys
     const nameToKeyMap: { [key: string]: string } = {
@@ -147,9 +149,11 @@ router.get("/dashboard/statuses", async (req: Request, res: Response) => {
           sm.name
         );
 
+        const catalogRow = catalogCounts.rows.find((row: any) => row.supermarket === sm.name);
         const base = {
           key: sm.key,
           name: sm.name,
+          productsInCatalog: catalogRow ? parseInt(catalogRow.count, 10) : 0,
           promotionExpireDate: scheduledRun?.promotionExpireDate?.toISOString() ?? null,
           scheduledEnabled: scheduledRun?.enabled ?? false,
           nextRunAt: scheduledRun?.nextRunAt?.toISOString() ?? null,
@@ -244,163 +248,6 @@ router.get("/discounts", async (req: Request, res: Response) => {
     });
   }
 });
-
-// Run scraper endpoint
-router.post(
-  "/scraper/run/:supermarket",
-  async (req: Request, res: Response) => {
-    let runId: number | null = null;
-
-    try {
-      const supermarketParam = req.params.supermarket.toLowerCase();
-
-      // Map URL params to full supermarket names
-      const nameMap: { [key: string]: string } = {
-        "albert-heijn": "Albert Heijn",
-        aldi: "Aldi",
-        dirk: "Dirk",
-        hoogvliet: "Hoogvliet",
-        jumbo: "Jumbo",
-        lidl: "Lidl",
-        plus: "PLUS",
-      };
-
-      const supermarketName = nameMap[supermarketParam];
-
-      if (!supermarketName) {
-        serverLogger.warn(
-          `Invalid supermarket parameter: ${req.params.supermarket}`
-        );
-        return res.status(400).json({
-          success: false,
-          error: `Unknown supermarket: ${req.params.supermarket}. Valid values: albert-heijn, aldi, dirk, hoogvliet, jumbo, lidl, plus`,
-        });
-      }
-
-      serverLogger.info(`Starting scraper for "${supermarketName}"`);
-
-      // Initialize scraper logger with supermarket name
-      scraperLogger.setSupermarket(supermarketName);
-      scraperLogger.info(
-        `=== Scraper session started for ${supermarketName} ===`
-      );
-
-      // Test database connection
-      const connected = await dataManager.testConnection();
-      if (!connected) {
-        throw new Error("Failed to connect to database");
-      }
-      scraperLogger.info("Database connection verified");
-
-      // Create scraper run record
-      const scraperRunController = dataManager.getScraperRunController();
-      runId = await scraperRunController.createRun(supermarketName);
-      const scraperRun = await scraperRunController.getRunById(runId);
-      const currentBatchRunDate = scraperRun?.startedAt || new Date();
-      scraperLogger.info(
-        `Scraper run tracked with ID: ${runId}, started at: ${currentBatchRunDate.toISOString()}`
-      );
-
-      // Fetch discounts via API client
-      const supermarketClient = getSupermarketClient(supermarketName);
-      const { discounts: supermarketDiscounts, expireDate } =
-        await supermarketClient.fetchDiscounts();
-
-      // Parse the expiration date (an unreadable one counts as missing)
-      const parsedExpireDate = expireDate ? new Date(expireDate) : undefined;
-      const promotionExpireDate =
-        parsedExpireDate && !Number.isNaN(parsedExpireDate.getTime()) ? parsedExpireDate : undefined;
-
-      // Update database
-      scraperLogger.info("Updating database with scraped data");
-
-      const productMetrics = await dataManager.addProductDb(
-        supermarketName,
-        supermarketDiscounts
-      );
-      scraperLogger.info("Products upserted to database");
-
-      const discountMetrics = await dataManager.addDiscountDb(
-        supermarketDiscounts,
-        supermarketName,
-        currentBatchRunDate
-      );
-      scraperLogger.info(
-        `New discounts processed: ${discountMetrics.created} created, ${discountMetrics.skipped} skipped`
-      );
-
-      // Update scraper run to success
-      await scraperRunController.updateRunSuccess(runId, {
-        productsScraped: supermarketDiscounts.length,
-        productsUpdated: productMetrics.updated,
-        productsCreated: productMetrics.created,
-        discountsDeactivated: 0, // No longer deactivating all discounts
-        discountsCreated: discountMetrics.created,
-        promotionExpireDate,
-      });
-
-      // Schedule the next weekly run from the end date of these offers, with
-      // the fallbacks of utils/Schedule.ts (retry, at most a week apart).
-      const nextRun = nextRunAfterExpiry(promotionExpireDate ?? null);
-      await dataManager
-        .getScheduledRunController()
-        .upsertScheduledRun(supermarketName, promotionExpireDate ?? null, nextRun.at);
-      scraperLogger.info(
-        `Next run for ${supermarketName}: ${nextRun.at.toISOString()} (${nextRun.reason}; offers end ${expireDate || "unknown"})`
-      );
-
-      scraperLogger.info(`=== Scraper session completed successfully ===`);
-      serverLogger.info(
-        `Scraper completed for "${supermarketName}" - ${supermarketDiscounts.length} products scraped`
-      );
-
-      res.status(200).json({
-        success: true,
-        message: `Scraper completed for ${supermarketName}`,
-        data: {
-          runId,
-          supermarket: supermarketName,
-          productsScraped: supermarketDiscounts.length,
-          productsCreated: productMetrics.created,
-          productsUpdated: productMetrics.updated,
-          discountsCreated: discountMetrics.created,
-          discountsSkipped: discountMetrics.skipped,
-          timestamp: new Date().toISOString(),
-        },
-      });
-    } catch (error: any) {
-      const errorMessage = error.message || "Unknown error";
-
-      // Update scraper run to failed if we have a runId
-      if (runId) {
-        try {
-          const scraperRunController = dataManager.getScraperRunController();
-          await scraperRunController.updateRunFailure(runId, errorMessage);
-        } catch (updateError) {
-          scraperLogger.error(
-            "Failed to update scraper run status:",
-            updateError
-          );
-        }
-      }
-
-      if (scraperLogger) {
-        scraperLogger.error("Error during scraping:", error);
-        scraperLogger.error(`=== Scraper session failed ===`);
-      }
-
-      serverLogger.error(
-        `Scraper failed for "${req.params.supermarket}": ${errorMessage}`
-      );
-
-      res.status(500).json({
-        success: false,
-        error: errorMessage,
-      });
-    }
-    // Don't close the pool - it's a singleton that should stay open
-  }
-);
 
 // Get all scraper runs
 router.get("/scraper/runs", async (req: Request, res: Response) => {
@@ -675,7 +522,7 @@ router.get("/scheduler/due", async (req: Request, res: Response) => {
     serverLogger.info("Fetching due scheduled runs");
 
     const scheduledRunController = dataManager.getScheduledRunController();
-    const dueRuns = await scheduledRunController.getDueScheduledRuns();
+    const dueRuns = await scheduledRunController.getDueScheduledRuns(STALE_AFTER_DAYS, RETRY_HOURS);
 
     serverLogger.info(`Retrieved ${dueRuns.length} due scheduled runs`);
     res.status(200).json(dueRuns);

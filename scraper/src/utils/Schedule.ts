@@ -1,5 +1,5 @@
 /**
- * When the next weekly run of a supermarket (catalog, then offers) is due.
+ * When the next weekly run of a supermarket (assortment and offers) is due.
  *
  * Each supermarket has its own offers week (AH, Lidl and Aldi Monday to
  * Sunday; Jumbo, Dirk and Hoogvliet Wednesday to Tuesday), so the run follows
@@ -19,6 +19,11 @@ export const TIME_ZONE = "Europe/Amsterdam";
 export const RUN_HOUR = 3;
 export const RETRY_HOURS = 3;
 export const MAX_DAYS_BETWEEN_RUNS = 7;
+/**
+ * Safety net next to the schedule: a supermarket without a successful run in
+ * this many days (or none at all) runs anyway, whatever its next run time says.
+ */
+export const STALE_AFTER_DAYS = 8;
 
 const HOUR_MS = 60 * 60 * 1000;
 

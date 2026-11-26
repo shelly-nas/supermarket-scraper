@@ -23,6 +23,27 @@ function promotionEnds(products: JumboProduct[], now: Date): string[] {
   return ends;
 }
 
+export const hasJumboPromotion = (product: JumboProduct) => (product.promotions ?? []).length > 0;
+
+/**
+ * The offers among promoted Jumbo products, with the folder end as run
+ * expiry. Shared by the offers run and the catalog run, which sees the same
+ * products.
+ */
+export function jumboOffers(
+  onPromotion: JumboProduct[],
+  now: Date = new Date()
+): { discounts: IProductDiscountDetails[]; expireDate: string } {
+  const folderEnd = folderExpireDate(promotionEnds(onPromotion, now).map((expireDate) => ({ expireDate })));
+  const discounts = onPromotion
+    .map((product) => mapJumboDiscount(product, folderEnd, now))
+    .filter((d): d is IProductDiscountDetails => d !== null);
+  scraperLogger.info(
+    `Total Jumbo discounts: ${discounts.length} of ${onPromotion.length} promoted products, folder expires: ${folderEnd}`
+  );
+  return { discounts, expireDate: folderEnd };
+}
+
 /**
  * Maps a product with a current price promotion to a discount; null when it
  * has none. Labels that are not about the price ("Gratis bezorging", "€2,00
@@ -87,19 +108,9 @@ class JumboApiClient extends ApiClient {
 
     const onPromotion: JumboProduct[] = [];
     await this.api.forEachPage(async (products) => {
-      onPromotion.push(...products.filter((p) => (p.promotions ?? []).length > 0));
+      onPromotion.push(...products.filter(hasJumboPromotion));
     });
-
-    const now = new Date();
-    const folderEnd = folderExpireDate(promotionEnds(onPromotion, now).map((expireDate) => ({ expireDate })));
-    const discounts = onPromotion
-      .map((product) => mapJumboDiscount(product, folderEnd, now))
-      .filter((d): d is IProductDiscountDetails => d !== null);
-
-    scraperLogger.info(
-      `Total Jumbo discounts: ${discounts.length} of ${onPromotion.length} promoted products, folder expires: ${folderEnd}`
-    );
-    return { discounts, expireDate: folderEnd };
+    return jumboOffers(onPromotion);
   }
 }
 

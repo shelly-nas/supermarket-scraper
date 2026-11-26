@@ -4,7 +4,6 @@ import {
   ConfigurationsStats,
   SupermarketStatus,
   ScraperRun,
-  CatalogStatus,
 } from "../types";
 
 const API_BASE_URL = "/api";
@@ -56,11 +55,12 @@ export const configurationsService = {
     }
   },
 
+  /** Starts a run (assortment and offers) in the background (202); 409 while one is in progress. */
   async runScraper(supermarket: string): Promise<void> {
     try {
       await axios.post(`${API_BASE_URL}/scraper/run/${supermarket}`);
     } catch (error) {
-      console.error(`Error running scraper for ${supermarket}:`, error);
+      console.error(`Error starting a run for ${supermarket}:`, error);
       throw error;
     }
   },
@@ -84,17 +84,5 @@ export const configurationsService = {
       console.error(`Error toggling scheduled run for ${supermarket}:`, error);
       throw error;
     }
-  },
-};
-
-export const catalogService = {
-  async getStatus(): Promise<CatalogStatus[]> {
-    const response = await axios.get(`${API_BASE_URL}/catalog/status`);
-    return response.data;
-  },
-
-  /** Starts a catalog run in the background (202); poll getStatus for progress. */
-  async run(supermarketKey: string): Promise<void> {
-    await axios.post(`${API_BASE_URL}/catalog/run/${supermarketKey}`);
   },
 };

@@ -1,49 +1,28 @@
 import cron from "node-cron";
 import { serverLogger } from "../utils/Logger";
 import PostgresDataManager from "../data/PostgresDataManager";
-import axios from "axios";
-import CatalogService, { CatalogRunInProgressError } from "./CatalogService";
-import { retryAfter } from "../utils/Schedule";
-
-// Map full names to the URL params of the run endpoint.
-const SUPERMARKET_KEYS: { [key: string]: string } = {
-  "Albert Heijn": "albert-heijn",
-  Aldi: "aldi",
-  Dirk: "dirk",
-  Hoogvliet: "hoogvliet",
-  Jumbo: "jumbo",
-  Lidl: "lidl",
-  PLUS: "plus",
-};
+import RunService, { RunInProgressError } from "./RunService";
+import { RETRY_HOURS, STALE_AFTER_DAYS, retryAfter } from "../utils/Schedule";
+import { SUPERMARKETS } from "../api/ProductSearch";
 
 /**
- * Runs each supermarket's weekly run when it is due: first the full catalog
- * (regular prices), then the offers, so both change on the supermarket's own
- * week. The offers run schedules the next one (utils/Schedule.ts).
+ * Starts each supermarket's run (assortment and offers, see RunService) when
+ * it is due. The run schedules the next one itself: after its offers end, or
+ * a retry a few hours later when it failed (utils/Schedule.ts).
  *
- * While a run is in progress the next one is set to a retry in a few hours,
- * so a run that fails or never finishes is tried again; a successful offers
- * run replaces it with the real date. CATALOG_ENABLED=false leaves out the
- * catalog step (manual catalog runs keep working).
+ * Safety net: every supermarket has a schedule row, and one without a
+ * successful run in STALE_AFTER_DAYS (or never) runs anyway, at most once per
+ * RETRY_HOURS. While a run is in progress its next run is set to a retry, so a
+ * run that never finishes is tried again too.
  */
 class SchedulerService {
   private cronJob: cron.ScheduledTask | null = null;
-  private dataManager: PostgresDataManager;
-  private apiPort: string;
-  private catalogService: CatalogService | null;
   private isRunning = false;
-  /** Supermarkets whose weekly run is in progress. */
-  private inProgress = new Set<string>();
 
   constructor(
-    dataManager: PostgresDataManager,
-    apiPort: string = "3001",
-    catalogService: CatalogService | null = null
-  ) {
-    this.dataManager = dataManager;
-    this.apiPort = apiPort;
-    this.catalogService = catalogService;
-  }
+    private dataManager: PostgresDataManager,
+    private runService: RunService
+  ) {}
 
   /**
    * Start the scheduler to check for due runs every minute
@@ -61,8 +40,10 @@ class SchedulerService {
       await this.checkAndRunDueScrapers();
     });
 
-    const catalog = this.catalogEnabled() ? "catalog, then offers" : "offers only (CATALOG_ENABLED=false)";
-    serverLogger.info(`Scheduler service started (checks every minute; weekly run: ${catalog})`);
+    const catalog = process.env.CATALOG_ENABLED === "false" ? "offers only (CATALOG_ENABLED=false)" : "assortment and offers";
+    serverLogger.info(
+      `Scheduler service started (checks every minute; run: ${catalog}; rerun after ${STALE_AFTER_DAYS} days without success)`
+    );
   }
 
   /**
@@ -74,10 +55,6 @@ class SchedulerService {
       this.cronJob = null;
       serverLogger.info("Scheduler service stopped");
     }
-  }
-
-  private catalogEnabled(): boolean {
-    return this.catalogService !== null && process.env.CATALOG_ENABLED !== "false";
   }
 
   /**
@@ -100,74 +77,38 @@ class SchedulerService {
         serverLogger.info(`Deactivated ${deactivatedCount} expired discounts`);
       }
 
-      const scheduledRunController =
-        this.dataManager.getScheduledRunController();
-      const dueRuns = await scheduledRunController.getDueScheduledRuns();
+      const scheduledRunController = this.dataManager.getScheduledRunController();
+      const added = await scheduledRunController.ensureScheduledRuns(SUPERMARKETS.map((s) => s.name));
+      if (added > 0) serverLogger.info(`Scheduled a first run for ${added} supermarket(s)`);
 
+      const dueRuns = await scheduledRunController.getDueScheduledRuns(STALE_AFTER_DAYS, RETRY_HOURS);
       if (dueRuns.length === 0) {
         serverLogger.debug("No due scraper runs at this time");
         return;
       }
 
       for (const run of dueRuns) {
-        // Provisional next run: a retry, replaced by a successful offers run.
+        // Provisional next run: a retry, replaced when the run finishes.
         const retryAt = retryAfter();
         await scheduledRunController.updateNextRunTime(run.supermarket, retryAt);
 
-        if (this.inProgress.has(run.supermarket)) {
-          serverLogger.warn(
-            `Weekly run for ${run.supermarket} is still in progress; next check ${retryAt.toISOString()}`
-          );
+        if (this.runService.isRunning(run.supermarket)) {
+          serverLogger.warn(`Run for ${run.supermarket} is still in progress; next check ${retryAt.toISOString()}`);
           continue;
         }
 
         // In the background, so supermarkets due at the same time run side by side.
-        this.inProgress.add(run.supermarket);
-        this.runWeekly(run.supermarket)
-          .catch((error) =>
-            serverLogger.error(`Weekly run for ${run.supermarket} failed:`, error?.message ?? error)
-          )
-          .finally(() => this.inProgress.delete(run.supermarket));
+        serverLogger.info(`Starting the due run for ${run.supermarket}`);
+        this.runService.start(run.supermarket).catch((error) => {
+          if (error instanceof RunInProgressError) return;
+          serverLogger.error(`Run for ${run.supermarket} could not start:`, error?.message ?? error);
+        });
       }
     } catch (error) {
       serverLogger.error("Error checking for due scrapers:", error);
     } finally {
       this.isRunning = false;
     }
-  }
-
-  /**
-   * One supermarket's weekly run: the catalog first (when it has one), then
-   * the offers, so the offers land on fresh catalog rows. A failed catalog
-   * run does not stop the offers run.
-   */
-  private async runWeekly(supermarket: string): Promise<void> {
-    const key = SUPERMARKET_KEYS[supermarket];
-    if (!key) {
-      serverLogger.error(`Unknown supermarket for scheduling: ${supermarket}`);
-      return;
-    }
-
-    if (this.catalogEnabled() && this.catalogService!.supportedSupermarkets.includes(supermarket)) {
-      serverLogger.info(`Weekly run for ${supermarket}: catalog`);
-      try {
-        const { done } = await this.catalogService!.start(supermarket);
-        await done;
-      } catch (error: any) {
-        if (error instanceof CatalogRunInProgressError) {
-          serverLogger.info(`Catalog run for ${supermarket} already running; continuing with the offers`);
-        } else {
-          serverLogger.error(`Catalog run for ${supermarket} could not start: ${error?.message}`);
-        }
-      }
-    }
-
-    serverLogger.info(`Weekly run for ${supermarket}: offers`);
-    await axios.post(`http://localhost:${this.apiPort}/api/scraper/run/${key}`, null, {
-      // An offers run can take minutes (PLUS uses a browser).
-      timeout: 60 * 60 * 1000,
-    });
-    serverLogger.info(`Weekly run for ${supermarket} done`);
   }
 
   /**

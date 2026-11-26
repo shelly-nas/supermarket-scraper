@@ -59,7 +59,7 @@ sequenceDiagram
     participant External as Supermarket Website
     participant DB as Database
 
-    Admin->>Web: Click "Run offers" for Albert Heijn (Weekly offers section)
+    Admin->>Web: Click "Run" for Albert Heijn (Supermarkets section)
     Web->>Admin: Show confirmation dialog
     Admin->>Web: Confirm
     Web->>API: POST /api/scraper/run/albert-heijn
@@ -103,7 +103,7 @@ sequenceDiagram
 **Main Flow:**
 
 1. Administrator navigates to Configurations page
-2. Administrator clicks "Run offers" for the desired supermarket in the Weekly offers section
+2. Administrator clicks "Run" for the desired supermarket in the Supermarkets section (the run also fetches the assortment, FR-003.9)
 3. System displays confirmation dialog
 4. Administrator confirms action
 5. System creates scraper_run record with "running" status

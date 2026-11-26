@@ -2,7 +2,8 @@ export class ScheduledRunModel {
   id: number;
   supermarket: string;
   nextRunAt: Date;
-  promotionExpireDate: Date;
+  /** Null until a run found the end date of the offers. */
+  promotionExpireDate: Date | null;
   enabled: boolean;
   createdAt?: Date;
   updatedAt?: Date;
@@ -11,7 +12,7 @@ export class ScheduledRunModel {
     id: number,
     supermarket: string,
     nextRunAt: Date,
-    promotionExpireDate: Date,
+    promotionExpireDate: Date | null,
     enabled: boolean,
     createdAt?: Date,
     updatedAt?: Date

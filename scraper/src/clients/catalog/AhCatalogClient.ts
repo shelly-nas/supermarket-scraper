@@ -1,5 +1,6 @@
 import { AxiosInstance } from "axios";
-import CatalogClient from "./CatalogClient";
+import CatalogClient, { CatalogOffers } from "./CatalogClient";
+import { ahOffers } from "../AhApiClient";
 import { ICatalogProduct } from "../../interfaces/ICatalogProduct";
 import { scraperLogger } from "../../utils/Logger";
 import AhMobileApi, { AhProduct, ahImage, ahProductUrl } from "../ah/AhMobileApi";
@@ -40,7 +41,11 @@ class AhCatalogClient extends CatalogClient {
     this.api = new AhMobileApi(http);
   }
 
+  /** Products with a bonus seen by the last fetchCatalog. */
+  private bonus: AhProduct[] = [];
+
   async fetchCatalog(onPage: (products: ICatalogProduct[]) => Promise<void>): Promise<void> {
+    this.bonus = [];
     await this.api.authenticate();
     const categories = await this.api.categories();
     if (categories.length === 0) throw new Error("AH: no product categories returned");
@@ -48,6 +53,7 @@ class AhCatalogClient extends CatalogClient {
 
     for (const category of categories) {
       await this.api.walkCategory(category.id, PAGE_SIZE, false, async (found, page, totalPages) => {
+        this.bonus.push(...found.filter((p) => p.isBonus));
         const products = found
           .map((p) => mapAhProduct(p, category.name))
           .filter((p): p is ICatalogProduct => p !== null);
@@ -55,6 +61,10 @@ class AhCatalogClient extends CatalogClient {
         if (products.length > 0) await onPage(products);
       });
     }
+  }
+
+  catalogOffers(): CatalogOffers {
+    return ahOffers(this.bonus);
   }
 }
 

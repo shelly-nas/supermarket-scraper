@@ -86,7 +86,7 @@ reads the API as `supermarket-scraper-api` (acc: `supermarket-scraper-acc-api`).
 - ✅ **Product Catalog**
 
   - Weekly full assortment scrape with regular prices for all seven supermarkets (Albert Heijn, Aldi, Dirk, Hoogvliet, Jumbo, Lidl food assortment, PLUS)
-  - Price history and catalog run tracking; on-demand runs from the "Full assortment" section of the admin UI ("Run catalog")
+  - Price history; the assortment and the offers are one run per supermarket, started on demand with "Run" in the admin UI
 
 - ✅ **Public Consumer API**
 
