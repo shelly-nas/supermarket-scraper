@@ -151,10 +151,22 @@ objects in category `offer`.
 | FR-007.9 | System SHALL record where a regular price comes from (`price_source`: `supermarket` or `checkjebon`) and keep catalog products without a known price (`regular_price` null; excluded from price comparison) | HIGH | ✅ Implemented |
 
 **Lidl catalog.** Lidl does not publish regular prices online. The Lidl catalog
-client crawls the food assortment pages on lidl.nl (starting at
-`/c/assortiment-producten/s10008015`, following links whose slug contains
-`assortiment` or `wijn`, at most 80 pages, meta refreshes followed) and reads
-every product tile (`data-grid-data` JSON): article number, name, brand, pack
+client reads two sources on lidl.nl, which each find food the other misses
+(November 2026: 514 from the shelf pages, 67 more from the search, 581 in
+total):
+
+- the food assortment pages, starting at `/c/assortiment-producten/s10008015`
+  and following links whose slug contains `assortiment` or `wijn`, also under
+  `/c/store/` where Lidl moved the shelves (a page is known by its id, so the
+  old and new path are read once; at most 80 pages; meta refreshes followed;
+  a shelf that answers 404 or 410 is skipped, a missing start page fails the
+  run);
+- Lidl's site search over its food tree (`/q/api/search?category.id=10068374`,
+  paged), the source of the newer `/h/` category pages, which only render
+  their first products server-side. A failing search keeps the shelf products.
+
+Both give the same tile data (`data-grid-data` JSON on the pages, `gridbox.data`
+in the search): article number, name, brand, pack
 size, image, product URL and Lidl's taxonomy (food worlds only; the two naming
 schemes are merged, other worlds become `Overig`). Only tiles with category
 `Food` or `F+V` are kept. The regular price is, in order:
