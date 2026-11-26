@@ -213,7 +213,7 @@ class AldiAlgolia {
       const result = await this.page(page);
       if (page === 0) {
         pages = result.nbPages;
-        scraperLogger.info(`Aldi: ${result.nbHits} objects in the product index`);
+        scraperLogger.debug(`Aldi: ${result.nbHits} objects in the product index`);
       }
       for (const hit of result.hits) {
         if (!hit?.objectID || seen.has(hit.objectID)) continue;

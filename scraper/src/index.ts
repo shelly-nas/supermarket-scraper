@@ -23,19 +23,9 @@ const corsOrigins = (process.env.CORS_ORIGINS || "")
 app.use(cors(corsOrigins.length > 0 ? { origin: corsOrigins } : undefined));
 app.use(express.json());
 
-// Request logging middleware
+// Requests at DEBUG only: the admin page polls every 30 seconds.
 app.use((req: Request, res: Response, next) => {
-  serverLogger.info(`${req.method} ${req.path}`);
-  next();
-});
-
-// Response logging middleware
-app.use((req: Request, res: Response, next) => {
-  const originalSend = res.send;
-  res.send = function (data) {
-    serverLogger.info(`${req.method} ${req.path} - Status: ${res.statusCode}`);
-    return originalSend.call(this, data);
-  };
+  res.on("finish", () => serverLogger.debug(`${req.method} ${req.path} ${res.statusCode}`));
   next();
 });
 
@@ -45,7 +35,7 @@ async function initializeDatabase(): Promise<boolean> {
   try {
     const connected = await dataManager.testConnection();
     if (connected) {
-      serverLogger.info("Database connection established successfully");
+      serverLogger.debug("Database connection established successfully");
       await runMigrations(dataManager.db);
       const filled = await dataManager.getProductController().backfillMatchFields();
       if (filled > 0) serverLogger.info(`Filled match fields of ${filled} existing products`);
@@ -97,16 +87,11 @@ async function startServer() {
 
   app.listen(PORT, () => {
     serverLogger.info(`API Server is running on port ${PORT}`);
-    serverLogger.info(`Health check: http://localhost:${PORT}/health`);
-    serverLogger.info(
-      `Run scraper: POST http://localhost:${PORT}/scraper/run/:supermarket`
-    );
 
     // Start the scheduler service
     const dataManager = new PostgresDataManager();
     const scheduler = new SchedulerService(dataManager, runService);
     scheduler.start();
-    serverLogger.info("Automated scheduler service initialized");
   });
 }
 

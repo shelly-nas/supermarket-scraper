@@ -88,7 +88,7 @@ class PlusApiClient extends ApiClient {
     discounts: IProductDiscountDetails[];
     expireDate: string;
   }> {
-    scraperLogger.info(`Fetching PLUS discounts via the plus.nl product list (offers filter)`);
+    scraperLogger.debug(`Fetching PLUS discounts via the plus.nl product list (offers filter)`);
 
     const site = this.createSite();
     const onOffer: PlusProduct[] = [];

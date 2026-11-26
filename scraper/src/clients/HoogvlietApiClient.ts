@@ -82,7 +82,7 @@ class HoogvlietApiClient extends ApiClient {
     discounts: IProductDiscountDetails[];
     expireDate: string;
   }> {
-    scraperLogger.info("Fetching Hoogvliet discounts via the webshop GraphQL API");
+    scraperLogger.debug("Fetching Hoogvliet discounts via the webshop GraphQL API");
 
     const discounts: IProductDiscountDetails[] = [];
     await this.api.forEachCategory(async (products) => {

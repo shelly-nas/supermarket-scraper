@@ -49,7 +49,7 @@ class AhCatalogClient extends CatalogClient {
     await this.api.authenticate();
     const categories = await this.api.categories();
     if (categories.length === 0) throw new Error("AH: no product categories returned");
-    scraperLogger.info(`AH catalog: ${categories.length} categories`);
+    scraperLogger.debug(`AH catalog: ${categories.length} categories`);
 
     for (const category of categories) {
       await this.api.walkCategory(category.id, PAGE_SIZE, false, async (found, page, totalPages) => {
@@ -57,7 +57,7 @@ class AhCatalogClient extends CatalogClient {
         const products = found
           .map((p) => mapAhProduct(p, category.name))
           .filter((p): p is ICatalogProduct => p !== null);
-        scraperLogger.info(`AH catalog: '${category.name}' page ${page}/${totalPages}: ${products.length} products`);
+        scraperLogger.debug(`AH catalog: '${category.name}' page ${page}/${totalPages}: ${products.length} products`);
         if (products.length > 0) await onPage(products);
       });
     }

@@ -12,6 +12,12 @@ services:
       # Persist data
       - postgres_data:/var/lib/postgresql/data
     restart: always
+    # Docker keeps the container log; rotated so it cannot fill the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   scraper-api:
     image: ${REGISTRY}/supermarket-scraper-api:${IMAGE_TAG:-latest}
@@ -32,9 +38,12 @@ services:
       postgres:
         condition: service_healthy
     restart: always
-    volumes:
-      # Mount logs directory for persistence
-      - ./logs:/app/logs
+    # Docker keeps the container log; rotated so it cannot fill the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Joined to shelly-network so the Baskit web container can proxy
     # /api/discounts to http://supermarket-scraper-api:3001/api/public/v1
     networks:
@@ -58,6 +67,12 @@ services:
     depends_on:
       - scraper-api
     restart: always
+    # Docker keeps the container log; rotated so it cannot fill the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - shelly-network
       - default

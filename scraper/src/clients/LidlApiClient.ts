@@ -131,7 +131,7 @@ class LidlApiClient extends ApiClient {
     discounts: IProductDiscountDetails[];
     expireDate: string;
   }> {
-    scraperLogger.info(`Fetching Lidl discounts from ${LIDL_URL}`);
+    scraperLogger.debug(`Fetching Lidl discounts from ${LIDL_URL}`);
     const response = await this.http.get<string>(LIDL_URL, { responseType: "text" });
     const tiles = extractGridData(response.data) as LidlOfferTile[];
     if (tiles.length === 0) {
@@ -156,7 +156,7 @@ class LidlApiClient extends ApiClient {
       if (!discount.expireDate) discount.expireDate = expireDate;
     }
 
-    scraperLogger.info(
+    scraperLogger.debug(
       `Total Lidl discounts: ${discounts.length} of ${tiles.length} tiles, expire: ${expireDate}`
     );
     return { discounts, expireDate };

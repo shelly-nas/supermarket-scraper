@@ -19,7 +19,7 @@ router.get("/health", (req: Request, res: Response) => {
 // Get dashboard statistics
 router.get("/dashboard/stats", async (req: Request, res: Response) => {
   try {
-    serverLogger.info("Fetching dashboard statistics");
+    serverLogger.debug("Fetching dashboard statistics");
 
     const dbContext = (dataManager as any).db;
 
@@ -75,7 +75,7 @@ router.get("/dashboard/stats", async (req: Request, res: Response) => {
       nextScheduledRun,
     };
 
-    serverLogger.info("Dashboard statistics retrieved successfully");
+    serverLogger.debug("Dashboard statistics retrieved successfully");
     res.status(200).json(stats);
   } catch (error: any) {
     const errorMessage = error.message || "Unknown error";
@@ -90,7 +90,7 @@ router.get("/dashboard/stats", async (req: Request, res: Response) => {
 // Get supermarket statuses
 router.get("/dashboard/statuses", async (req: Request, res: Response) => {
   try {
-    serverLogger.info("Fetching supermarket statuses");
+    serverLogger.debug("Fetching supermarket statuses");
 
     const dbContext = (dataManager as any).db;
     const scraperRunController = dataManager.getScraperRunController();
@@ -184,7 +184,7 @@ router.get("/dashboard/statuses", async (req: Request, res: Response) => {
       })
     );
 
-    serverLogger.info("Supermarket statuses retrieved successfully");
+    serverLogger.debug("Supermarket statuses retrieved successfully");
     res.status(200).json(statuses);
   } catch (error: any) {
     const errorMessage = error.message || "Unknown error";
@@ -199,7 +199,7 @@ router.get("/dashboard/statuses", async (req: Request, res: Response) => {
 // Get all discounts with product details
 router.get("/discounts", async (req: Request, res: Response) => {
   try {
-    serverLogger.info("Fetching all active discounts with product details");
+    serverLogger.debug("Fetching all active discounts with product details");
 
     const query = `
       SELECT
@@ -235,7 +235,7 @@ router.get("/discounts", async (req: Request, res: Response) => {
     const dbContext = (dataManager as any).db;
     const result = await dbContext.query(query);
 
-    serverLogger.info(`Retrieved ${result.rows.length} active discounts`);
+    serverLogger.debug(`Retrieved ${result.rows.length} active discounts`);
 
     res.status(200).json(result.rows);
   } catch (error: any) {
@@ -252,7 +252,7 @@ router.get("/discounts", async (req: Request, res: Response) => {
 // Get all scraper runs
 router.get("/scraper/runs", async (req: Request, res: Response) => {
   try {
-    serverLogger.info("Fetching all scraper runs");
+    serverLogger.debug("Fetching all scraper runs");
 
     const limit = req.query.limit
       ? parseInt(req.query.limit as string, 10)
@@ -260,7 +260,7 @@ router.get("/scraper/runs", async (req: Request, res: Response) => {
     const scraperRunController = dataManager.getScraperRunController();
     const runs = await scraperRunController.getAllRuns(limit);
 
-    serverLogger.info(`Retrieved ${runs.length} scraper runs`);
+    serverLogger.debug(`Retrieved ${runs.length} scraper runs`);
     res.status(200).json(runs);
   } catch (error: any) {
     const errorMessage = error.message || "Unknown error";
@@ -302,7 +302,7 @@ router.get(
         });
       }
 
-      serverLogger.info(`Fetching scraper runs for "${supermarketName}"`);
+      serverLogger.debug(`Fetching scraper runs for "${supermarketName}"`);
 
       const limit = req.query.limit
         ? parseInt(req.query.limit as string, 10)
@@ -313,7 +313,7 @@ router.get(
         limit
       );
 
-      serverLogger.info(
+      serverLogger.debug(
         `Retrieved ${runs.length} scraper runs for ${supermarketName}`
       );
       res.status(200).json(runs);
@@ -340,7 +340,7 @@ router.get("/scraper/run/:id", async (req: Request, res: Response) => {
       });
     }
 
-    serverLogger.info(`Fetching scraper run with ID: ${runId}`);
+    serverLogger.debug(`Fetching scraper run with ID: ${runId}`);
 
     const scraperRunController = dataManager.getScraperRunController();
     const run = await scraperRunController.getRunById(runId);
@@ -352,7 +352,7 @@ router.get("/scraper/run/:id", async (req: Request, res: Response) => {
       });
     }
 
-    serverLogger.info(`Retrieved scraper run ${runId}`);
+    serverLogger.debug(`Retrieved scraper run ${runId}`);
     res.status(200).json(run);
   } catch (error: any) {
     const errorMessage = error.message || "Unknown error";
@@ -367,12 +367,12 @@ router.get("/scraper/run/:id", async (req: Request, res: Response) => {
 // Get all scheduled runs
 router.get("/scheduler/runs", async (req: Request, res: Response) => {
   try {
-    serverLogger.info("Fetching all scheduled runs");
+    serverLogger.debug("Fetching all scheduled runs");
 
     const scheduledRunController = dataManager.getScheduledRunController();
     const scheduledRuns = await scheduledRunController.getAllScheduledRuns();
 
-    serverLogger.info(`Retrieved ${scheduledRuns.length} scheduled runs`);
+    serverLogger.debug(`Retrieved ${scheduledRuns.length} scheduled runs`);
     res.status(200).json(scheduledRuns);
   } catch (error: any) {
     const errorMessage = error.message || "Unknown error";
@@ -414,7 +414,7 @@ router.get(
         });
       }
 
-      serverLogger.info(`Fetching scheduled run for "${supermarketName}"`);
+      serverLogger.debug(`Fetching scheduled run for "${supermarketName}"`);
 
       const scheduledRunController = dataManager.getScheduledRunController();
       const scheduledRun = await scheduledRunController.getScheduledRun(
@@ -428,7 +428,7 @@ router.get(
         });
       }
 
-      serverLogger.info(`Retrieved scheduled run for ${supermarketName}`);
+      serverLogger.debug(`Retrieved scheduled run for ${supermarketName}`);
       res.status(200).json(scheduledRun);
     } catch (error: any) {
       const errorMessage = error.message || "Unknown error";
@@ -479,7 +479,7 @@ router.put(
         });
       }
 
-      serverLogger.info(
+      serverLogger.debug(
         `Toggling scheduled run for "${supermarketName}" to ${enabled}`
       );
 
@@ -496,7 +496,7 @@ router.put(
         });
       }
 
-      serverLogger.info(
+      serverLogger.debug(
         `Scheduled run for ${supermarketName} toggled to ${enabled}`
       );
       res.status(200).json({
@@ -519,12 +519,12 @@ router.put(
 // Get due scheduled runs (for internal scheduler use)
 router.get("/scheduler/due", async (req: Request, res: Response) => {
   try {
-    serverLogger.info("Fetching due scheduled runs");
+    serverLogger.debug("Fetching due scheduled runs");
 
     const scheduledRunController = dataManager.getScheduledRunController();
     const dueRuns = await scheduledRunController.getDueScheduledRuns(STALE_AFTER_DAYS, RETRY_HOURS);
 
-    serverLogger.info(`Retrieved ${dueRuns.length} due scheduled runs`);
+    serverLogger.debug(`Retrieved ${dueRuns.length} due scheduled runs`);
     res.status(200).json(dueRuns);
   } catch (error: any) {
     const errorMessage = error.message || "Unknown error";
@@ -539,13 +539,13 @@ router.get("/scheduler/due", async (req: Request, res: Response) => {
 // Manually deactivate expired discounts
 router.post("/discounts/cleanup", async (req: Request, res: Response) => {
   try {
-    serverLogger.info("Manually triggered expired discounts cleanup");
+    serverLogger.debug("Manually triggered expired discounts cleanup");
 
     const discountController = dataManager.getDiscountController();
     const deactivatedCount =
       await discountController.deactivateExpiredDiscounts();
 
-    serverLogger.info(`Deactivated ${deactivatedCount} expired discounts`);
+    serverLogger.debug(`Deactivated ${deactivatedCount} expired discounts`);
     res.status(200).json({
       success: true,
       message: `Deactivated ${deactivatedCount} expired discounts`,

@@ -6,14 +6,14 @@ Monitoring, non-functional requirements, integration, deployment and configurati
 
 | ID       | Requirement                                                           | Priority | Status         |
 | -------- | --------------------------------------------------------------------- | -------- | -------------- |
-| FR-006.1 | System SHALL log all scraper activities to dedicated log files        | HIGH     | ✅ Implemented |
+| FR-006.1 | System SHALL log to the container's stdout/stderr only, which Docker keeps and rotates (3 files of 10 MB per container); no log files of its own. At INFO: startup, migrations, the scheduler's decisions, each run's start and result (one line, with every failed step), one total per supermarket and step, and every warning and error. Per page, per request and per query detail is DEBUG | HIGH     | ✅ Implemented |
 | FR-006.2 | System SHALL track scraper run status (running/success/failed)        | HIGH     | ✅ Implemented |
 | FR-006.3 | System SHALL record products scraped/created/updated counts           | HIGH     | ✅ Implemented |
 | FR-006.4 | System SHALL record discounts created/deactivated counts              | HIGH     | ✅ Implemented |
 | FR-006.5 | System SHALL measure and store run duration                           | MEDIUM   | ✅ Implemented |
 | FR-006.6 | System SHALL capture error messages for failed runs                   | HIGH     | ✅ Implemented |
-| FR-006.7 | System SHALL log server activities separately from scraper activities | MEDIUM   | ✅ Implemented |
-| FR-006.8 | System SHALL support configurable log levels                          | LOW      | ✅ Implemented |
+| FR-006.7 | System SHALL name the supermarket in every run log line (and the run id in its start and result lines), so parallel runs can be told apart in one stream | MEDIUM   | ✅ Implemented |
+| FR-006.8 | System SHALL support configurable log levels (`LOG_LEVEL`: ERROR, WARN, INFO, DEBUG; default INFO) | LOW      | ✅ Implemented |
 
 ## 4.2 Non-Functional Requirements
 

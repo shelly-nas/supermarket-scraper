@@ -37,7 +37,7 @@ export class PostgresDataManager {
     this.scraperRunController = new PostgresScraperRunController(this.db);
     this.scheduledRunController = new PostgresScheduledRunController(this.db);
 
-    scraperLogger.info("PostgresDataManager initialized.");
+    scraperLogger.debug("PostgresDataManager initialized.");
   }
 
   public getProductController(): PostgresProductController {
@@ -119,11 +119,11 @@ export class PostgresDataManager {
         updated++;
       }
     }
-    scraperLogger.info(
+    scraperLogger.debug(
       `Processed '${uniqueProductArray.length}' unique products: ${created} created, ${updated} updated (from ${products.length} scraped items).`
     );
     if (regularPrices > 0) {
-      scraperLogger.info(`Stored ${regularPrices} regular prices shown next to ${supermarket} offers.`);
+      scraperLogger.debug(`Stored ${regularPrices} regular prices shown next to ${supermarket} offers.`);
     }
 
     return { created, updated };
@@ -156,7 +156,7 @@ export class PostgresDataManager {
     const previousBatchExpireDate =
       lastSuccessfulRun?.promotionExpireDate || null;
 
-    scraperLogger.info(
+    scraperLogger.debug(
       `Previous batch expire date for ${supermarket}: ${
         previousBatchExpireDate ? previousBatchExpireDate.toISOString() : "none"
       }`
@@ -201,7 +201,7 @@ export class PostgresDataManager {
       }
     }
 
-    scraperLogger.info(
+    scraperLogger.debug(
       `Processed '${uniqueDiscountArray.length}' unique discounts: ${discountsCreated} created, ${discountsSkipped} skipped (from ${discounts.length} scraped items).`
     );
 
@@ -242,7 +242,7 @@ export class PostgresDataManager {
         }
       }
 
-      scraperLogger.info(
+      scraperLogger.debug(
         `Found ${productDiscounts.length} discounts for supermarket '${supermarket}'.`
       );
       return productDiscounts;
@@ -272,7 +272,7 @@ export class PostgresDataManager {
       );
 
       if (discounts.length > 0 && discounts[0].expireDate) {
-        scraperLogger.info(
+        scraperLogger.debug(
           `Expire date for supermarket '${supermarket}' is '${discounts[0].expireDate}'.`
         );
         return discounts[0].expireDate;
@@ -305,7 +305,7 @@ export class PostgresDataManager {
           supermarket
         );
 
-      scraperLogger.info(
+      scraperLogger.debug(
         `Deactivated ${deactivatedCount} discount records for '${supermarket}'. Products will be updated during the next scrape.`
       );
 

@@ -9,7 +9,7 @@ abstract class ApiClient {
   }>;
 
   protected logInfo(message: string): void {
-    scraperLogger.info(message);
+    scraperLogger.debug(message);
   }
 
   protected logDebug(message: string): void {

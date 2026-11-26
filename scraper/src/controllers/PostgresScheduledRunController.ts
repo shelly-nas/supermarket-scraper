@@ -67,7 +67,7 @@ class PostgresScheduledRunController {
       );
 
       const id = result.rows[0].id;
-      scraperLogger.info(
+      scraperLogger.debug(
         `Scheduled run upserted for ${supermarket} with ID: ${id}, next run at: ${nextRunAt}`
       );
       return id;
@@ -249,7 +249,7 @@ class PostgresScheduledRunController {
         return false;
       }
 
-      scraperLogger.info(
+      scraperLogger.debug(
         `Scheduled run for ${supermarket} toggled to ${enabled}`
       );
       return true;
@@ -284,7 +284,7 @@ class PostgresScheduledRunController {
         return false;
       }
 
-      scraperLogger.info(
+      scraperLogger.debug(
         `Next run time updated for ${supermarket} to ${nextRunAt}`
       );
       return true;
@@ -312,7 +312,7 @@ class PostgresScheduledRunController {
         return false;
       }
 
-      scraperLogger.info(`Scheduled run for ${supermarket} deleted`);
+      scraperLogger.debug(`Scheduled run for ${supermarket} deleted`);
       return true;
     } catch (error) {
       scraperLogger.error(

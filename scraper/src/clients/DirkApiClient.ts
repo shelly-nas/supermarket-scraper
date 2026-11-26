@@ -82,16 +82,16 @@ class DirkApiClient extends ApiClient {
     discounts: IProductDiscountDetails[];
     expireDate: string;
   }> {
-    scraperLogger.info(`Fetching Dirk discounts via GraphQL API`);
+    scraperLogger.debug(`Fetching Dirk discounts via GraphQL API`);
 
     const departments = await this.api.departments();
-    scraperLogger.info(`Found ${departments.length} departments`);
+    scraperLogger.debug(`Found ${departments.length} departments`);
 
     const offers: { offer: DirkOffer; category: string }[] = [];
     for (const dept of departments) {
       const found = await this.api.offers(dept.id);
       if (found.length === 0) continue;
-      scraperLogger.info(`Department '${dept.description}': ${found.length} offers`);
+      scraperLogger.debug(`Department '${dept.description}': ${found.length} offers`);
       offers.push(...found.map((offer) => ({ offer, category: dept.description })));
     }
 
@@ -119,7 +119,7 @@ class DirkApiClient extends ApiClient {
     }
 
     const expireDate = folderExpireDate(discounts);
-    scraperLogger.info(
+    scraperLogger.debug(
       `Total Dirk discounts: ${discounts.length} for ${offers.length} offers, folder expires: ${expireDate}`
     );
     return { discounts, expireDate };

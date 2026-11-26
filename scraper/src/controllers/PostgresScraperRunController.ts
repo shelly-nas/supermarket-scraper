@@ -95,7 +95,7 @@ class PostgresScraperRunController {
       [supermarket]
     );
     const row = result.rows[0];
-    scraperLogger.info(`Scraper run created with ID: ${row.id}`);
+    scraperLogger.debug(`Scraper run created with ID: ${row.id}`);
     return { id: row.id, startedAt: row.started_at };
   }
 
@@ -136,7 +136,7 @@ class PostgresScraperRunController {
         m.catalogProductsRemoved ?? null,
       ]
     );
-    scraperLogger.info(`Scraper run ${runId} marked as ${outcome.status}`);
+    scraperLogger.debug(`Scraper run ${runId} marked as ${outcome.status}`);
   }
 
   /** Runs left 'running' by a crash or restart are closed as failed on startup. */

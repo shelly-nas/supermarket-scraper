@@ -67,8 +67,7 @@ class RunService {
   }
 
   private async execute(supermarket: string, run: { id: number; startedAt: Date }): Promise<void> {
-    scraperLogger.setSupermarket(supermarket);
-    scraperLogger.info(`=== Run ${run.id} started for ${supermarket} ===`);
+    serverLogger.info(`Run ${run.id} for ${supermarket} started`);
     const errors: string[] = [];
     const metrics: RunMetrics = {
       productsScraped: 0,
@@ -124,13 +123,11 @@ class RunService {
       .upsertScheduledRun(supermarket, failed ? null : expireDate ?? null, next.at);
 
     const summary =
-      `${metrics.catalogProducts ?? "no"} assortment products, ${metrics.productsScraped} offers; ` +
+      `${metrics.catalogProducts ?? "no"} assortment products, ${metrics.productsScraped} offers (${metrics.discountsCreated} new); ` +
       `next run ${next.at.toISOString()} (${next.reason})`;
     if (failed) {
-      scraperLogger.error(`=== Run ${run.id} failed: ${errors.join("; ")} ===`);
       serverLogger.error(`Run ${run.id} for ${supermarket} failed: ${errors.join("; ")}; ${summary}`);
     } else {
-      scraperLogger.info(`=== Run ${run.id} completed successfully ===`);
       serverLogger.info(`Run ${run.id} for ${supermarket} done: ${summary}`);
     }
   }
@@ -162,7 +159,7 @@ class RunService {
   ): Promise<Pick<RunMetrics, "productsScraped" | "productsCreated" | "productsUpdated" | "discountsCreated">> {
     const products = await this.dataManager.addProductDb(supermarket, offers.discounts);
     const discounts = await this.dataManager.addDiscountDb(offers.discounts, supermarket, startedAt);
-    scraperLogger.info(`Offers stored: ${discounts.created} new discounts, ${discounts.skipped} unchanged`);
+    scraperLogger.debug(`Offers stored: ${discounts.created} new discounts, ${discounts.skipped} unchanged`);
     return {
       productsScraped: offers.discounts.length,
       productsCreated: products.created,

@@ -82,7 +82,7 @@ Routes: `/discounts` (default) and `/configurations`. The Discounts table shows 
 DB_NAME=supermarket
 DB_USER=supermarket_user
 DB_PASSWORD=change_this_password
-LOG_LEVEL=INFO   # DEBUG | INFO | WARN | ERROR
+LOG_LEVEL=INFO   # DEBUG | INFO | WARN | ERROR; logs go to stdout only (utils/Logger.ts), Docker rotates them
 CORS_ORIGINS=    # optional, comma separated allowed origins (empty = all)
 CATALOG_ENABLED=true          # catalog step of each supermarket's weekly run on/off
 IMAGE_CACHE_DIR=              # optional, where the image proxy caches images (default: OS temp dir)

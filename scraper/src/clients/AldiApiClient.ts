@@ -100,7 +100,7 @@ class AldiApiClient extends ApiClient {
     discounts: IProductDiscountDetails[];
     expireDate: string;
   }> {
-    scraperLogger.info(`Fetching Aldi discounts via the aldi.nl offers page`);
+    scraperLogger.debug(`Fetching Aldi discounts via the aldi.nl offers page`);
 
     const folder = await this.api.folder();
     const regular = new Map((await this.api.all()).filter((p) => !isAldiOffer(p)).map((p) => [p.objectID, p]));
@@ -128,10 +128,10 @@ class AldiApiClient extends ApiClient {
       }
     }
     if (discounts.length === 0) throw new Error("Aldi: no current offers found");
-    scraperLogger.info(`Aldi: ${nonFood.size} folder products skipped as non-food`);
+    scraperLogger.debug(`Aldi: ${nonFood.size} folder products skipped as non-food`);
 
     const expireDate = folderExpireDate(discounts);
-    scraperLogger.info(
+    scraperLogger.debug(
       `Total Aldi discounts: ${discounts.length} in ${folder.categories.length} folder categories, folder expires: ${expireDate}`
     );
     return { discounts, expireDate };

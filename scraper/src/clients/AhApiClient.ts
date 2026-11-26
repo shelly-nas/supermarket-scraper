@@ -157,7 +157,7 @@ class AhApiClient extends ApiClient {
     discounts: IProductDiscountDetails[];
     expireDate: string;
   }> {
-    scraperLogger.info("Fetching Albert Heijn bonus products via the AH mobile API");
+    scraperLogger.debug("Fetching Albert Heijn bonus products via the AH mobile API");
     await this.api.authenticate();
     const categories = await this.api.categories();
     if (categories.length === 0) throw new Error("AH: no product categories returned");
@@ -167,7 +167,7 @@ class AhApiClient extends ApiClient {
       await this.api.walkCategory(category.id, PAGE_SIZE, true, async (products) => {
         bonus.push(...products);
       });
-      scraperLogger.info(`AH bonus: '${category.name}' done, ${bonus.length} products with a bonus so far`);
+      scraperLogger.debug(`AH bonus: '${category.name}' done, ${bonus.length} products with a bonus so far`);
     }
     return ahOffers(bonus);
   }

@@ -104,7 +104,7 @@ class JumboApiClient extends ApiClient {
     discounts: IProductDiscountDetails[];
     expireDate: string;
   }> {
-    scraperLogger.info("Fetching Jumbo discounts via the jumbo.com GraphQL API");
+    scraperLogger.debug("Fetching Jumbo discounts via the jumbo.com GraphQL API");
 
     const onPromotion: JumboProduct[] = [];
     await this.api.forEachPage(async (products) => {

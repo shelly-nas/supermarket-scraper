@@ -33,7 +33,7 @@ class SchedulerService {
       return;
     }
 
-    serverLogger.info("Starting scheduler service...");
+    serverLogger.debug("Starting scheduler service...");
 
     // Run every minute
     this.cronJob = cron.schedule("* * * * *", async () => {

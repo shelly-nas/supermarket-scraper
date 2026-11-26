@@ -290,7 +290,7 @@ class LidlCatalogClient extends CatalogClient {
       const data = await this.get<Array<{ n: string; d: CheckjebonProduct[] }>>(CHECKJEBON_URL, "json");
       const lidl = (Array.isArray(data) ? data : []).find((s) => s.n === "lidl");
       const index = buildPriceIndex(lidl?.d ?? []);
-      scraperLogger.info(`Lidl catalog: ${index.byId.size} checkjebon prices loaded`);
+      scraperLogger.debug(`Lidl catalog: ${index.byId.size} checkjebon prices loaded`);
       return index;
     } catch (error: any) {
       scraperLogger.warn(`Lidl catalog: checkjebon prices unavailable (${error?.message}), continuing without prices`);
@@ -331,7 +331,7 @@ class LidlCatalogClient extends CatalogClient {
         if (product.price !== null) withPrice++;
         products.push(product);
       }
-      scraperLogger.info(`Lidl catalog: ${path}: ${products.length} new products`);
+      scraperLogger.debug(`Lidl catalog: ${path}: ${products.length} new products`);
       if (products.length > 0) await onPage(products);
       await sleep(REQUEST_DELAY_MS);
     }

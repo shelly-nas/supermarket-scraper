@@ -32,7 +32,7 @@ class PostgresDataContext {
       scraperLogger.error("Unexpected error on idle PostgreSQL client", err);
     });
 
-    scraperLogger.info("PostgreSQL connection pool initialized");
+    scraperLogger.debug("PostgreSQL connection pool initialized");
   }
 
   public static getInstance(config?: DatabaseConfig): PostgresDataContext {
@@ -94,7 +94,7 @@ class PostgresDataContext {
   public async testConnection(): Promise<boolean> {
     try {
       const result = await this.query("SELECT NOW()");
-      scraperLogger.info("Database connection test successful");
+      scraperLogger.debug("Database connection test successful");
       return true;
     } catch (error) {
       scraperLogger.error("Database connection test failed", error);
@@ -110,7 +110,7 @@ class PostgresDataContext {
       }
       await this.pool.end();
       PostgresDataContext.instance = null as any;
-      scraperLogger.info("PostgreSQL connection pool closed");
+      scraperLogger.debug("PostgreSQL connection pool closed");
     } catch (error) {
       scraperLogger.error("Error closing PostgreSQL connection pool", error);
       throw error;
