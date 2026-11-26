@@ -9,11 +9,52 @@ const CLIENT_ID = "appie-ios";
 const CLIENT_VERSION = "9.28";
 const MAX_ATTEMPTS = 4;
 export const REQUEST_DELAY_MS = 300;
+/** A search answers 400 for pages past this many results. */
+export const SEARCH_RESULT_LIMIT = 3000;
+
+export type AhSortOn = "RELEVANCE" | "PRICELOWHIGH" | "PRICEHIGHLOW";
 
 export interface AhCategory {
   id: number;
   name: string;
 }
+
+/**
+ * AH's top-level product categories, as listed at the start of
+ * https://www.ah.nl/sitemaps/entities/products/categories.xml. Each holds at
+ * most a few thousand products, below the search limit of 10,000.
+ */
+export const AH_CATEGORIES: AhCategory[] = [
+  { id: 6401, name: "Groente, aardappelen" },
+  { id: 20885, name: "Fruit, verse sappen" },
+  { id: 1301, name: "Maaltijden, salades" },
+  { id: 9344, name: "Vlees" },
+  { id: 1651, name: "Vis" },
+  { id: 20128, name: "Vegetarisch, vegan en plantaardig" },
+  { id: 5481, name: "Vleeswaren" },
+  { id: 1192, name: "Kaas" },
+  { id: 1730, name: "Zuivel, eieren" },
+  { id: 1355, name: "Bakkerij" },
+  { id: 4246, name: "Glutenvrij" },
+  { id: 20824, name: "Borrel, chips, snacks" },
+  { id: 1796, name: "Pasta, rijst, wereldkeuken" },
+  { id: 6409, name: "Soepen, sauzen, kruiden, olie" },
+  { id: 20129, name: "Koek, snoep, chocolade" },
+  { id: 6405, name: "Ontbijtgranen, beleg" },
+  { id: 2457, name: "Tussendoortjes" },
+  { id: 5881, name: "Diepvries" },
+  { id: 1043, name: "Koffie, thee" },
+  { id: 20130, name: "Frisdrank, sappen, water" },
+  { id: 6406, name: "Bier, wijn, aperitieven" },
+  { id: 1045, name: "Drogisterij" },
+  { id: 11717, name: "Gezondheid en sport" },
+  { id: 1165, name: "Huishouden" },
+  { id: 18521, name: "Baby en kind" },
+  { id: 18519, name: "Huisdier" },
+  { id: 1057, name: "Koken, tafelen, vrije tijd" },
+  { id: 44025, name: "AH Bloemenshop" },
+  { id: 20603, name: "AH Voordeelshop" },
+];
 
 export interface AhImage {
   width: number;
@@ -138,30 +179,69 @@ export default class AhMobileApi {
     this.http.defaults.headers.common.Authorization = `Bearer ${token}`;
   }
 
+  /**
+   * The top-level categories. AH removed its categories endpoint
+   * (`/mobile-services/v1/product-shelves/categories` answers 404 since
+   * November 2026), so the list is fixed here; the search still takes these
+   * ids as `taxonomyId`.
+   */
   async categories(): Promise<AhCategory[]> {
-    const data = await this.request<AhCategory[]>("categories", () =>
-      this.http.get("/mobile-services/v1/product-shelves/categories")
-    );
-    return data ?? [];
+    return AH_CATEGORIES;
   }
 
   /**
    * One page of products in a top-level category. With `bonusOnly` the API
    * returns only products with a bonus (all kinds: also online-only, Etos and
-   * Gall & Gall). A search stops at 10,000 results, so search per category.
+   * Gall & Gall).
    */
   async searchPage(
     categoryId: number,
     page: number,
     size: number,
-    bonusOnly = false
+    bonusOnly = false,
+    sortOn: AhSortOn = "RELEVANCE"
   ): Promise<AhSearchResponse> {
-    const params: Record<string, string | number> = { taxonomyId: categoryId, page, size, sortOn: "RELEVANCE" };
+    const params: Record<string, string | number> = { taxonomyId: categoryId, page, size, sortOn };
     if (bonusOnly) params.filters = "bonus=Bonus";
     const data = await this.request<AhSearchResponse>(
       `search${bonusOnly ? " bonus" : ""} category ${categoryId} page ${page}`,
       () => this.http.get("/mobile-services/product/search/v2", { params })
     );
     return data ?? {};
+  }
+
+  /**
+   * Every product of a top-level category, page by page, each product once.
+   * A search answers 400 past its 3,000th result, so the category is read by
+   * price from low to high and, when it holds more, the rest from high to low.
+   */
+  async walkCategory(
+    categoryId: number,
+    size: number,
+    bonusOnly: boolean,
+    onPage: (products: AhProduct[], page: number, totalPages: number) => Promise<void>,
+    limit = SEARCH_RESULT_LIMIT
+  ): Promise<void> {
+    const seen = new Set<number>();
+    let total = 0;
+    let read = 0;
+    for (const sortOn of ["PRICELOWHIGH", "PRICEHIGHLOW"] as const) {
+      if (sortOn === "PRICEHIGHLOW" && total <= limit) break;
+      const maxPages = Math.floor(limit / size);
+      let totalPages = 1;
+      for (let page = 0; page < Math.min(totalPages, maxPages) && !(total > 0 && seen.size >= total); page++) {
+        const data = await this.searchPage(categoryId, page, size, bonusOnly, sortOn);
+        totalPages = data.page?.totalPages ?? 0;
+        total = Math.max(total, data.page?.totalElements ?? 0);
+        read++;
+        const fresh = (data.products ?? []).filter((p) => !seen.has(p.webshopId));
+        fresh.forEach((p) => seen.add(p.webshopId));
+        if (fresh.length > 0) await onPage(fresh, read, Math.max(totalPages, 1));
+        await sleep(REQUEST_DELAY_MS);
+      }
+    }
+    if (seen.size < total) {
+      scraperLogger.warn(`AH: category ${categoryId} gave ${seen.size} of ${total} products`);
+    }
   }
 }

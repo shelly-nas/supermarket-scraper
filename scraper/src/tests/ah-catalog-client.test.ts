@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import AhCatalogClient, { describeError, mapAhProduct } from "../clients/catalog/AhCatalogClient";
 import { ICatalogProduct } from "../interfaces/ICatalogProduct";
+import AhMobileApi from "../clients/ah/AhMobileApi";
 
 vi.mock("../utils/Logger", () => ({
   scraperLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -34,9 +35,6 @@ function fakeHttp(pages: Record<string, any>, failFirst?: number) {
     defaults: { headers: { common: {} as Record<string, string> } },
     post: vi.fn().mockResolvedValue({ data: { access_token: "token" } }),
     get: vi.fn().mockImplementation(async (url: string, config?: any) => {
-      if (url.endsWith("/categories")) {
-        return { data: [{ id: 1, name: "Zuivel" }, { id: 2, name: "Bakkerij" }] };
-      }
       if (failures > 0) {
         failures--;
         throw { response: { status: 401 } };
@@ -72,11 +70,46 @@ describe("AH catalog client", () => {
     expect(mapAhProduct(product(2, { priceBeforeBonus: undefined }), "x")).toBeNull();
   });
 
+  it("lists the top-level categories without calling AH, which removed its categories endpoint", async () => {
+    const http = fakeHttp({});
+    const categories = await new AhMobileApi(http as any).categories();
+
+    expect(http.get).not.toHaveBeenCalled();
+    expect(categories).toContainEqual({ id: 6401, name: "Groente, aardappelen" });
+    expect(categories).toContainEqual({ id: 1045, name: "Drogisterij" });
+    expect(new Set(categories.map((c) => c.id)).size).toBe(categories.length);
+  });
+
+  it("reads a category past the search limit from both price ends, each product once", async () => {
+    // 7 products, the search stops after 4: low to high gives 1-4, high to low 7-4.
+    const byPrice = [1, 2, 3, 4, 5, 6, 7];
+    const http = fakeHttp({});
+    http.get = vi.fn().mockImplementation(async (_url: string, config: any) => {
+      const { page, size, sortOn } = config.params;
+      if ((page + 1) * size > 4) throw { response: { status: 400 } };
+      const order = sortOn === "PRICEHIGHLOW" ? [...byPrice].reverse() : byPrice;
+      const ids = order.slice(page * size, (page + 1) * size);
+      return { data: { products: ids.map((id) => product(id)), page: { totalPages: 4, totalElements: 7 } } };
+    });
+    const pages: number[][] = [];
+    await new AhMobileApi(http as any).walkCategory(6409, 2, false, async (products) => {
+      pages.push(products.map((p) => p.webshopId));
+    }, 4);
+
+    expect(pages).toEqual([[1, 2], [3, 4], [7, 6], [5]]);
+    expect(http.get.mock.calls.map((c: any) => c[1].params.sortOn)).toEqual([
+      "PRICELOWHIGH",
+      "PRICELOWHIGH",
+      "PRICEHIGHLOW",
+      "PRICEHIGHLOW",
+    ]);
+  });
+
   it("walks every page of every category", async () => {
     const http = fakeHttp({
-      "1:0": { products: [product(1), product(2)], page: { totalPages: 2 } },
-      "1:1": { products: [product(3)], page: { totalPages: 2 } },
-      "2:0": { products: [product(4)], page: { totalPages: 1 } },
+      "6401:0": { products: [product(1), product(2)], page: { totalPages: 2 } },
+      "6401:1": { products: [product(3)], page: { totalPages: 2 } },
+      "1045:0": { products: [product(4)], page: { totalPages: 1 } },
     });
     const client = new AhCatalogClient(http as any);
     const pages: ICatalogProduct[][] = [];
@@ -89,7 +122,7 @@ describe("AH catalog client", () => {
   });
 
   it("re-authenticates once when the token expires mid run", async () => {
-    const http = fakeHttp({ "1:0": { products: [product(1)], page: { totalPages: 1 } } }, 1);
+    const http = fakeHttp({ "6401:0": { products: [product(1)], page: { totalPages: 1 } } }, 1);
     const client = new AhCatalogClient(http as any);
     const seen: string[] = [];
     await client.fetchCatalog(async (p) => {

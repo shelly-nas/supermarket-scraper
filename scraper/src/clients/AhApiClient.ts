@@ -8,8 +8,6 @@ import AhMobileApi, {
   AhProduct,
   ahImage,
   ahProductUrl,
-  REQUEST_DELAY_MS,
-  sleep,
 } from "./ah/AhMobileApi";
 
 const PAGE_SIZE = 200;
@@ -147,19 +145,13 @@ class AhApiClient extends ApiClient {
     let seen = 0;
 
     for (const category of categories) {
-      let page = 0;
-      let totalPages = 1;
-      while (page < totalPages) {
-        const data = await this.api.searchPage(category.id, page, PAGE_SIZE, true);
-        totalPages = data.page?.totalPages ?? 0;
-        for (const product of data.products ?? []) {
+      await this.api.walkCategory(category.id, PAGE_SIZE, true, async (products) => {
+        for (const product of products) {
           seen++;
           const discount = mapAhDiscount(product, now);
           if (discount && !discounts.has(discount.externalId!)) discounts.set(discount.externalId!, discount);
         }
-        page++;
-        await sleep(REQUEST_DELAY_MS);
-      }
+      });
       scraperLogger.info(`AH bonus: '${category.name}' done, ${discounts.size} bonus products so far`);
     }
 
