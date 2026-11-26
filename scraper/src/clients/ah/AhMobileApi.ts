@@ -15,6 +15,43 @@ export interface AhCategory {
   name: string;
 }
 
+/**
+ * AH's top-level product categories, as listed at the start of
+ * https://www.ah.nl/sitemaps/entities/products/categories.xml. Each holds at
+ * most a few thousand products, below the search limit of 10,000.
+ */
+export const AH_CATEGORIES: AhCategory[] = [
+  { id: 6401, name: "Groente, aardappelen" },
+  { id: 20885, name: "Fruit, verse sappen" },
+  { id: 1301, name: "Maaltijden, salades" },
+  { id: 9344, name: "Vlees" },
+  { id: 1651, name: "Vis" },
+  { id: 20128, name: "Vegetarisch, vegan en plantaardig" },
+  { id: 5481, name: "Vleeswaren" },
+  { id: 1192, name: "Kaas" },
+  { id: 1730, name: "Zuivel, eieren" },
+  { id: 1355, name: "Bakkerij" },
+  { id: 4246, name: "Glutenvrij" },
+  { id: 20824, name: "Borrel, chips, snacks" },
+  { id: 1796, name: "Pasta, rijst, wereldkeuken" },
+  { id: 6409, name: "Soepen, sauzen, kruiden, olie" },
+  { id: 20129, name: "Koek, snoep, chocolade" },
+  { id: 6405, name: "Ontbijtgranen, beleg" },
+  { id: 2457, name: "Tussendoortjes" },
+  { id: 5881, name: "Diepvries" },
+  { id: 1043, name: "Koffie, thee" },
+  { id: 20130, name: "Frisdrank, sappen, water" },
+  { id: 6406, name: "Bier, wijn, aperitieven" },
+  { id: 1045, name: "Drogisterij" },
+  { id: 11717, name: "Gezondheid en sport" },
+  { id: 1165, name: "Huishouden" },
+  { id: 18521, name: "Baby en kind" },
+  { id: 18519, name: "Huisdier" },
+  { id: 1057, name: "Koken, tafelen, vrije tijd" },
+  { id: 44025, name: "AH Bloemenshop" },
+  { id: 20603, name: "AH Voordeelshop" },
+];
+
 export interface AhImage {
   width: number;
   height: number;
@@ -138,11 +175,14 @@ export default class AhMobileApi {
     this.http.defaults.headers.common.Authorization = `Bearer ${token}`;
   }
 
+  /**
+   * The top-level categories. AH removed its categories endpoint
+   * (`/mobile-services/v1/product-shelves/categories` answers 404 since
+   * November 2026), so the list is fixed here; the search still takes these
+   * ids as `taxonomyId`.
+   */
   async categories(): Promise<AhCategory[]> {
-    const data = await this.request<AhCategory[]>("categories", () =>
-      this.http.get("/mobile-services/v1/product-shelves/categories")
-    );
-    return data ?? [];
+    return AH_CATEGORIES;
   }
 
   /**

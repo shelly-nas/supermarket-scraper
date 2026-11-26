@@ -119,21 +119,23 @@ describe("AH bonus product to discount", () => {
 describe("AH offers client", () => {
   it("lists the bonus products of every category once, with the folder end as run expiry", async () => {
     const pages: Record<string, any> = {
-      "1:0": { products: [bonus(1), bonus(2)], page: { totalPages: 2 } },
-      "1:1": { products: [bonus(3, { promotionType: "AHONLINE" })], page: { totalPages: 2 } },
-      "2:0": { products: [bonus(2), bonus(4, { bonusEndDate: "2026-12-27" })], page: { totalPages: 1 } },
+      "18519:0": { products: [bonus(1), bonus(2)], page: { totalPages: 2 } },
+      "18519:1": { products: [bonus(3, { promotionType: "AHONLINE" })], page: { totalPages: 2 } },
+      "1057:0": { products: [bonus(2), bonus(4, { bonusEndDate: "2026-12-27" })], page: { totalPages: 1 } },
     };
     const http = {
       defaults: { headers: { common: {} as Record<string, string> } },
       post: vi.fn().mockResolvedValue({ data: { access_token: "token" } }),
       get: vi.fn().mockImplementation(async (url: string, config?: any) => {
-        if (url.endsWith("/categories")) return { data: [{ id: 1, name: "Huisdier" }, { id: 2, name: "Speelgoed" }] };
         expect(config.params.filters).toBe("bonus=Bonus");
         return { data: pages[`${config.params.taxonomyId}:${config.params.page}`] };
       }),
     };
 
-    const { discounts, expireDate } = await new AhApiClient(http as any).fetchDiscounts();
+    // The fixtures' bonus week, so the offers are not expired by the time the test runs.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-21T12:00:00"));
+    const { discounts, expireDate } = await new AhApiClient(http as any).fetchDiscounts().finally(() => vi.useRealTimers());
 
     expect(discounts.map((d) => d.externalId)).toEqual(["1", "2", "4"]);
     expect(expireDate).toBe(END);

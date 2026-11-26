@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import AhCatalogClient, { describeError, mapAhProduct } from "../clients/catalog/AhCatalogClient";
 import { ICatalogProduct } from "../interfaces/ICatalogProduct";
+import AhMobileApi from "../clients/ah/AhMobileApi";
 
 vi.mock("../utils/Logger", () => ({
   scraperLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -34,9 +35,6 @@ function fakeHttp(pages: Record<string, any>, failFirst?: number) {
     defaults: { headers: { common: {} as Record<string, string> } },
     post: vi.fn().mockResolvedValue({ data: { access_token: "token" } }),
     get: vi.fn().mockImplementation(async (url: string, config?: any) => {
-      if (url.endsWith("/categories")) {
-        return { data: [{ id: 1, name: "Zuivel" }, { id: 2, name: "Bakkerij" }] };
-      }
       if (failures > 0) {
         failures--;
         throw { response: { status: 401 } };
@@ -72,11 +70,21 @@ describe("AH catalog client", () => {
     expect(mapAhProduct(product(2, { priceBeforeBonus: undefined }), "x")).toBeNull();
   });
 
+  it("lists the top-level categories without calling AH, which removed its categories endpoint", async () => {
+    const http = fakeHttp({});
+    const categories = await new AhMobileApi(http as any).categories();
+
+    expect(http.get).not.toHaveBeenCalled();
+    expect(categories).toContainEqual({ id: 6401, name: "Groente, aardappelen" });
+    expect(categories).toContainEqual({ id: 1045, name: "Drogisterij" });
+    expect(new Set(categories.map((c) => c.id)).size).toBe(categories.length);
+  });
+
   it("walks every page of every category", async () => {
     const http = fakeHttp({
-      "1:0": { products: [product(1), product(2)], page: { totalPages: 2 } },
-      "1:1": { products: [product(3)], page: { totalPages: 2 } },
-      "2:0": { products: [product(4)], page: { totalPages: 1 } },
+      "6401:0": { products: [product(1), product(2)], page: { totalPages: 2 } },
+      "6401:1": { products: [product(3)], page: { totalPages: 2 } },
+      "1045:0": { products: [product(4)], page: { totalPages: 1 } },
     });
     const client = new AhCatalogClient(http as any);
     const pages: ICatalogProduct[][] = [];
@@ -89,7 +97,7 @@ describe("AH catalog client", () => {
   });
 
   it("re-authenticates once when the token expires mid run", async () => {
-    const http = fakeHttp({ "1:0": { products: [product(1)], page: { totalPages: 1 } } }, 1);
+    const http = fakeHttp({ "6401:0": { products: [product(1)], page: { totalPages: 1 } } }, 1);
     const client = new AhCatalogClient(http as any);
     const seen: string[] = [];
     await client.fetchCatalog(async (p) => {
