@@ -7,7 +7,9 @@ import { sameQuantity } from "../../utils/ProductMatch";
 
 // Lidl publishes its food assortment on lidl.nl as server-rendered pages under
 // "Assortiment > Producten", one page per shelf (kaas, vleeswaren, ...). Every
-// product tile carries its data as JSON in a data-grid-data attribute. Lidl
+// product tile carries its data as JSON in a data-grid-data attribute. Since
+// November 2026 the shelf pages live under /c/store/ (the old paths redirect)
+// and the start page only links to them; a page is known by its id (a10008017). Lidl
 // does not publish regular prices online (only current offers have one), so
 // prices come from the open checkjebon.nl dataset (MIT), matched on the Lidl
 // article number and, failing that, on a unique product name. The regular
@@ -16,6 +18,13 @@ import { sameQuantity } from "../../utils/ProductMatch";
 // checkjebon price for a while (PostgresCatalogController.keepsObservedPrice).
 const LIDL_BASE = "https://www.lidl.nl";
 const START_PATH = "/c/assortiment-producten/s10008015";
+// Lidl's site search over its food tree ("Eten en drinken", 10068374), the
+// source of the newer /h/ category pages. It finds food that no shelf page
+// shows; the shelf pages find some the search misses, so both are read.
+const SEARCH_URL = `${LIDL_BASE}/q/api/search?category.id=10068374&assortment=NL&locale=nl_NL&version=v2.0.0`;
+const SEARCH_PAGE_SIZE = 100;
+// The search reports at most 10,000 results; the food tree holds a few hundred.
+const MAX_SEARCH_RESULTS = 5000;
 const CHECKJEBON_URL =
   "https://raw.githubusercontent.com/supermarkt/checkjebon/main/data/supermarkets.json";
 const USER_AGENT =
@@ -41,6 +50,12 @@ const CATEGORY_ALIASES: Record<string, string> = {
   "Eieren & basisvoedingsmiddelen (pasta, bloem, peulvruchten etc.)": "Voorraadkast",
   "Geesten": "Sterke drank",
 };
+
+/** One page of Lidl's site search; each item carries the same data as a page tile. */
+interface LidlSearchPage {
+  numFound?: number;
+  items?: Array<{ gridbox?: { data?: LidlGridData } }>;
+}
 
 export interface LidlGridData {
   erpNumber?: string;
@@ -117,15 +132,21 @@ export function extractGridData(html: string): LidlGridData[] {
   return products;
 }
 
-/** Links to further assortment pages (e.g. /c/assortiment-kaas/a10009593), as paths. */
+/**
+ * Links to further assortment pages, as paths: /c/assortiment-kaas/a10009593
+ * or, since November 2026, /c/store/assortiment-kaas/a10009593.
+ */
 export function findAssortmentLinks(html: string): string[] {
   const paths = new Set<string>();
   for (const match of html.matchAll(/href="(?:https:\/\/www\.lidl\.nl)?(\/c\/[^"#?]+)/g)) {
     const path = match[1];
-    if (/^\/c\/[^/]*(assortiment|wijn)[^/]*\/[as]\d+$/.test(path)) paths.add(path);
+    if (/^\/c\/(?:store\/)?[^/]*(assortiment|wijn)[^/]*\/[as]\d+$/.test(path)) paths.add(path);
   }
   return [...paths];
 }
+
+/** The page id at the end of an assortment path (a10009593), the same under every path. */
+export const assortmentPageId = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /** Some assortment URLs answer with a meta refresh to their current path. */
 export function metaRefreshTarget(html: string): string | null {
@@ -276,7 +297,8 @@ class LidlCatalogClient extends CatalogClient {
         const status = error?.response?.status;
         const retryable = !status || status === 429 || status >= 500;
         if (!retryable || attempt >= MAX_ATTEMPTS) {
-          throw new Error(`Lidl ${url}: ${status ? `HTTP ${status}` : error?.message ?? "request failed"}`);
+          const failure = new Error(`Lidl ${url}: ${status ? `HTTP ${status}` : error?.message ?? "request failed"}`);
+          throw Object.assign(failure, { status });
         }
         scraperLogger.warn(`Lidl catalog: ${url} ${status ?? error?.message}, retry ${attempt}/${MAX_ATTEMPTS - 1}`);
         await sleep(REQUEST_DELAY_MS * 2 ** attempt * 2);
@@ -309,18 +331,26 @@ class LidlCatalogClient extends CatalogClient {
   async fetchCatalog(onPage: (products: ICatalogProduct[]) => Promise<void>): Promise<void> {
     const index = await this.loadPriceIndex();
     const queue = [START_PATH];
-    const visited = new Set<string>();
+    const visited = new Set<string>(); // page ids
     const seen = new Set<string>();
     let withPrice = 0;
 
     while (queue.length > 0 && visited.size < MAX_PAGES) {
       const path = queue.shift()!;
-      if (visited.has(path)) continue;
-      visited.add(path);
+      if (visited.has(assortmentPageId(path))) continue;
+      visited.add(assortmentPageId(path));
 
-      const html = await this.fetchPage(path);
+      let html: string;
+      try {
+        html = await this.fetchPage(path);
+      } catch (error: any) {
+        // A shelf Lidl took away is skipped; a missing start page fails the run.
+        if (path === START_PATH || (error?.status !== 404 && error?.status !== 410)) throw error;
+        scraperLogger.debug(`Lidl catalog: ${path} is gone (HTTP ${error.status}), skipped`);
+        continue;
+      }
       for (const link of findAssortmentLinks(html)) {
-        if (!visited.has(link)) queue.push(link);
+        if (!visited.has(assortmentPageId(link))) queue.push(link);
       }
 
       const products: ICatalogProduct[] = [];
@@ -339,8 +369,36 @@ class LidlCatalogClient extends CatalogClient {
     if (queue.length > 0) {
       scraperLogger.warn(`Lidl catalog: stopped at ${MAX_PAGES} pages, ${queue.length} links not visited`);
     }
+    const fromPages = seen.size;
+
+    // Food the search finds that no shelf page showed. A failing search leaves
+    // the shelf products in place.
+    for (let offset = 0; offset < MAX_SEARCH_RESULTS; ) {
+      let page: LidlSearchPage;
+      try {
+        page = await this.get<LidlSearchPage>(`${SEARCH_URL}&fetchsize=${SEARCH_PAGE_SIZE}&offset=${offset}`, "json");
+      } catch (error: any) {
+        scraperLogger.warn(`Lidl catalog: search failed at ${offset}, keeping the shelf products: ${error?.message}`);
+        break;
+      }
+      const items = page?.items ?? [];
+      const products: ICatalogProduct[] = [];
+      for (const item of items) {
+        const product = item?.gridbox?.data ? mapLidlProduct(item.gridbox.data, index) : null;
+        if (!product || seen.has(product.externalId)) continue;
+        seen.add(product.externalId);
+        if (product.price !== null) withPrice++;
+        products.push(product);
+      }
+      if (products.length > 0) await onPage(products);
+      offset += items.length;
+      if (items.length === 0 || offset >= (page?.numFound ?? 0)) break;
+      await sleep(REQUEST_DELAY_MS);
+    }
+
     scraperLogger.info(
-      `Lidl catalog: ${seen.size} food products from ${visited.size} pages, ${withPrice} with a price`
+      `Lidl catalog: ${seen.size} food products (${fromPages} from ${visited.size} pages, ` +
+        `${seen.size - fromPages} more from the search), ${withPrice} with a price`
     );
   }
 }

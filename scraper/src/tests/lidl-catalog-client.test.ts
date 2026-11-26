@@ -62,6 +62,7 @@ describe("Lidl catalog parsing", () => {
   it("follows only assortment and wine pages", () => {
     const html = page([], [
       "/c/assortiment-kaas/a10009593",
+      "/c/store/assortiment-groente-en-fruit/a10008017",
       "https://www.lidl.nl/c/assortiment-wijn/a10008469#10031991",
       "/c/wijnen/s10052442",
       "/c/klussen-tuin/s10067761",
@@ -70,6 +71,7 @@ describe("Lidl catalog parsing", () => {
     expect(findAssortmentLinks(html).sort()).toEqual([
       "/c/assortiment-kaas/a10009593",
       "/c/assortiment-wijn/a10008469",
+      "/c/store/assortiment-groente-en-fruit/a10008017",
       "/c/wijnen/s10052442",
     ]);
   });
@@ -164,12 +166,23 @@ describe("Lidl price matching", () => {
 describe("Lidl catalog client", () => {
   const checkjebon = [{ n: "ah", d: [] }, { n: "lidl", d: [{ n: "Product 1", l: "1", p: 1.5, s: "" }] }];
 
-  function fakeHttp(pages: Record<string, string>, options: { failPrices?: boolean } = {}) {
+  /** `search`: the food tree's search results, two per page; "fail" for a search that fails. */
+  function fakeHttp(
+    pages: Record<string, string>,
+    options: { failPrices?: boolean; search?: LidlGridData[] | "fail" } = {}
+  ) {
     return {
       get: vi.fn().mockImplementation(async (url: string) => {
         if (url.includes("checkjebon")) {
           if (options.failPrices) throw { response: { status: 404 } };
           return { data: checkjebon };
+        }
+        if (url.includes("/q/api/search")) {
+          if (options.search === "fail") throw { response: { status: 404 } };
+          const all = options.search ?? [];
+          const offset = Number(new URL(url).searchParams.get("offset"));
+          const items = all.slice(offset, offset + 2).map((data) => ({ gridbox: { data } }));
+          return { data: { numFound: all.length, items } };
         }
         const path = url.replace("https://www.lidl.nl", "");
         if (!(path in pages)) throw { response: { status: 404 } };
@@ -191,6 +204,55 @@ describe("Lidl catalog client", () => {
 
     expect(pages.map((p) => p.map((x) => x.externalId))).toEqual([["1", "2"], ["3"]]);
     expect(pages[0][0]).toMatchObject({ price: 1.5, priceSource: "checkjebon" });
+  });
+
+  it("reads a page once under its old and its /c/store/ path, and skips dead links", async () => {
+    const http = fakeHttp({
+      "/c/assortiment-producten/s10008015": page([], [
+        "/c/assortiment-nieuw/a9", // gone: 404
+        "/c/assortiment-kaas/a1",
+        "/c/store/assortiment-kaas/a1",
+      ]),
+      "/c/assortiment-kaas/a1": page([tile("1")], ["/c/store/assortiment-vlees/a2"]),
+      "/c/store/assortiment-vlees/a2": page([tile("2")]),
+    });
+    const seen: string[] = [];
+    await new LidlCatalogClient(http as any).fetchCatalog(async (p) => {
+      seen.push(...p.map((x) => x.externalId));
+    });
+    expect(seen).toEqual(["1", "2"]);
+    const fetched = http.get.mock.calls.map((c: any[]) => c[0]).filter((u: string) => u.includes("lidl.nl"));
+    expect(fetched.filter((u: string) => u.endsWith("/a1"))).toHaveLength(1);
+  });
+
+  it("adds the food the search finds but no shelf page shows", async () => {
+    const http = fakeHttp(
+      {
+        "/c/assortiment-producten/s10008015": page([], ["/c/assortiment-kaas/a1"]),
+        "/c/assortiment-kaas/a1": page([tile("1"), tile("2")]),
+      },
+      { search: [tile("2"), tile("3"), tile("4", { category: "NonFood" }), tile("5")] }
+    );
+    const pages: string[][] = [];
+    await new LidlCatalogClient(http as any).fetchCatalog(async (p) => {
+      pages.push(p.map((x) => x.externalId));
+    });
+    expect(pages).toEqual([["1", "2"], ["3"], ["5"]]);
+  });
+
+  it("keeps the shelf products when the search fails", async () => {
+    const http = fakeHttp(
+      {
+        "/c/assortiment-producten/s10008015": page([], ["/c/assortiment-kaas/a1"]),
+        "/c/assortiment-kaas/a1": page([tile("1")]),
+      },
+      { search: "fail" }
+    );
+    const seen: string[] = [];
+    await new LidlCatalogClient(http as any).fetchCatalog(async (p) => {
+      seen.push(...p.map((x) => x.externalId));
+    });
+    expect(seen).toEqual(["1"]);
   });
 
   it("follows a meta refresh", async () => {
@@ -221,7 +283,7 @@ describe("Lidl catalog client", () => {
     expect(products.map((p) => [p.externalId, p.price])).toEqual([["1", null]]);
   });
 
-  it("fails the run when a Lidl page keeps failing", async () => {
+  it("fails the run when the start page is gone", async () => {
     const http = fakeHttp({});
     await expect(new LidlCatalogClient(http as any).fetchCatalog(async () => {})).rejects.toThrow(
       "HTTP 404"
