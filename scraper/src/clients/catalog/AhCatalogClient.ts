@@ -2,7 +2,7 @@ import { AxiosInstance } from "axios";
 import CatalogClient from "./CatalogClient";
 import { ICatalogProduct } from "../../interfaces/ICatalogProduct";
 import { scraperLogger } from "../../utils/Logger";
-import AhMobileApi, { AhProduct, ahImage, ahProductUrl, REQUEST_DELAY_MS, sleep } from "../ah/AhMobileApi";
+import AhMobileApi, { AhProduct, ahImage, ahProductUrl } from "../ah/AhMobileApi";
 
 export { describeError } from "../ah/AhMobileApi";
 
@@ -47,21 +47,13 @@ class AhCatalogClient extends CatalogClient {
     scraperLogger.info(`AH catalog: ${categories.length} categories`);
 
     for (const category of categories) {
-      let page = 0;
-      let totalPages = 1;
-      while (page < totalPages) {
-        const data = await this.api.searchPage(category.id, page, PAGE_SIZE);
-        totalPages = data.page?.totalPages ?? 0;
-        const products = (data.products ?? [])
+      await this.api.walkCategory(category.id, PAGE_SIZE, false, async (found, page, totalPages) => {
+        const products = found
           .map((p) => mapAhProduct(p, category.name))
           .filter((p): p is ICatalogProduct => p !== null);
-        scraperLogger.info(
-          `AH catalog: '${category.name}' page ${page + 1}/${Math.max(totalPages, 1)}: ${products.length} products`
-        );
+        scraperLogger.info(`AH catalog: '${category.name}' page ${page}/${totalPages}: ${products.length} products`);
         if (products.length > 0) await onPage(products);
-        page++;
-        await sleep(REQUEST_DELAY_MS);
-      }
+      });
     }
   }
 }

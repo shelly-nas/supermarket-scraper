@@ -80,6 +80,31 @@ describe("AH catalog client", () => {
     expect(new Set(categories.map((c) => c.id)).size).toBe(categories.length);
   });
 
+  it("reads a category past the search limit from both price ends, each product once", async () => {
+    // 7 products, the search stops after 4: low to high gives 1-4, high to low 7-4.
+    const byPrice = [1, 2, 3, 4, 5, 6, 7];
+    const http = fakeHttp({});
+    http.get = vi.fn().mockImplementation(async (_url: string, config: any) => {
+      const { page, size, sortOn } = config.params;
+      if ((page + 1) * size > 4) throw { response: { status: 400 } };
+      const order = sortOn === "PRICEHIGHLOW" ? [...byPrice].reverse() : byPrice;
+      const ids = order.slice(page * size, (page + 1) * size);
+      return { data: { products: ids.map((id) => product(id)), page: { totalPages: 4, totalElements: 7 } } };
+    });
+    const pages: number[][] = [];
+    await new AhMobileApi(http as any).walkCategory(6409, 2, false, async (products) => {
+      pages.push(products.map((p) => p.webshopId));
+    }, 4);
+
+    expect(pages).toEqual([[1, 2], [3, 4], [7, 6], [5]]);
+    expect(http.get.mock.calls.map((c: any) => c[1].params.sortOn)).toEqual([
+      "PRICELOWHIGH",
+      "PRICELOWHIGH",
+      "PRICEHIGHLOW",
+      "PRICEHIGHLOW",
+    ]);
+  });
+
   it("walks every page of every category", async () => {
     const http = fakeHttp({
       "6401:0": { products: [product(1), product(2)], page: { totalPages: 2 } },

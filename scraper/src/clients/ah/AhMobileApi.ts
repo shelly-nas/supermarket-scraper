@@ -9,6 +9,10 @@ const CLIENT_ID = "appie-ios";
 const CLIENT_VERSION = "9.28";
 const MAX_ATTEMPTS = 4;
 export const REQUEST_DELAY_MS = 300;
+/** A search answers 400 for pages past this many results. */
+export const SEARCH_RESULT_LIMIT = 3000;
+
+export type AhSortOn = "RELEVANCE" | "PRICELOWHIGH" | "PRICEHIGHLOW";
 
 export interface AhCategory {
   id: number;
@@ -188,20 +192,56 @@ export default class AhMobileApi {
   /**
    * One page of products in a top-level category. With `bonusOnly` the API
    * returns only products with a bonus (all kinds: also online-only, Etos and
-   * Gall & Gall). A search stops at 10,000 results, so search per category.
+   * Gall & Gall).
    */
   async searchPage(
     categoryId: number,
     page: number,
     size: number,
-    bonusOnly = false
+    bonusOnly = false,
+    sortOn: AhSortOn = "RELEVANCE"
   ): Promise<AhSearchResponse> {
-    const params: Record<string, string | number> = { taxonomyId: categoryId, page, size, sortOn: "RELEVANCE" };
+    const params: Record<string, string | number> = { taxonomyId: categoryId, page, size, sortOn };
     if (bonusOnly) params.filters = "bonus=Bonus";
     const data = await this.request<AhSearchResponse>(
       `search${bonusOnly ? " bonus" : ""} category ${categoryId} page ${page}`,
       () => this.http.get("/mobile-services/product/search/v2", { params })
     );
     return data ?? {};
+  }
+
+  /**
+   * Every product of a top-level category, page by page, each product once.
+   * A search answers 400 past its 3,000th result, so the category is read by
+   * price from low to high and, when it holds more, the rest from high to low.
+   */
+  async walkCategory(
+    categoryId: number,
+    size: number,
+    bonusOnly: boolean,
+    onPage: (products: AhProduct[], page: number, totalPages: number) => Promise<void>,
+    limit = SEARCH_RESULT_LIMIT
+  ): Promise<void> {
+    const seen = new Set<number>();
+    let total = 0;
+    let read = 0;
+    for (const sortOn of ["PRICELOWHIGH", "PRICEHIGHLOW"] as const) {
+      if (sortOn === "PRICEHIGHLOW" && total <= limit) break;
+      const maxPages = Math.floor(limit / size);
+      let totalPages = 1;
+      for (let page = 0; page < Math.min(totalPages, maxPages) && !(total > 0 && seen.size >= total); page++) {
+        const data = await this.searchPage(categoryId, page, size, bonusOnly, sortOn);
+        totalPages = data.page?.totalPages ?? 0;
+        total = Math.max(total, data.page?.totalElements ?? 0);
+        read++;
+        const fresh = (data.products ?? []).filter((p) => !seen.has(p.webshopId));
+        fresh.forEach((p) => seen.add(p.webshopId));
+        if (fresh.length > 0) await onPage(fresh, read, Math.max(totalPages, 1));
+        await sleep(REQUEST_DELAY_MS);
+      }
+    }
+    if (seen.size < total) {
+      scraperLogger.warn(`AH: category ${categoryId} gave ${seen.size} of ${total} products`);
+    }
   }
 }
