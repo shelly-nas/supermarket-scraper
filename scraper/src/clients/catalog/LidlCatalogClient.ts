@@ -4,6 +4,7 @@ import { ICatalogProduct } from "../../interfaces/ICatalogProduct";
 import { scraperLogger } from "../../utils/Logger";
 import { parseQuantity } from "../../utils/Quantity";
 import { sameQuantity } from "../../utils/ProductMatch";
+import { CategorizedName, checkjebonAdditions, learnLidlFood, normalizeName } from "../lidl/LidlCheckjebon";
 
 // Lidl publishes its food assortment on lidl.nl as server-rendered pages under
 // "Assortiment > Producten", one page per shelf (kaas, vleeswaren, ...). Every
@@ -154,9 +155,6 @@ export function metaRefreshTarget(html: string): string | null {
   return match ? decodeEntities(match[1]) : null;
 }
 
-const normalizeName = (name: string) =>
-  name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
 const normalizeSize = (size: string | null | undefined) =>
   (size ?? "").toLowerCase().replace(/\s+/g, "").replace(",", ".");
 
@@ -273,12 +271,25 @@ export function mapLidlProduct(tile: LidlGridData, index: PriceIndex): ICatalogP
   };
 }
 
+// Checkjebon additions are delivered in pages of this size.
+const ADDITIONS_PAGE_SIZE = 500;
+
 class LidlCatalogClient extends CatalogClient {
   readonly supermarket = "Lidl";
 
   private http: AxiosInstance;
+  /** The Lidl rows of the last checkjebon download. */
+  private checkjebon: CheckjebonProduct[] = [];
 
-  constructor(http?: AxiosInstance) {
+  /**
+   * `training`: names with their category from another supermarket's catalog
+   * (AH, from the database), from which the checkjebon additions learn what is
+   * food; without it, or when it is empty, they are left out.
+   */
+  constructor(
+    http?: AxiosInstance,
+    private training: () => Promise<CategorizedName[]> = async () => []
+  ) {
     super();
     this.http =
       http ??
@@ -311,11 +322,13 @@ class LidlCatalogClient extends CatalogClient {
     try {
       const data = await this.get<Array<{ n: string; d: CheckjebonProduct[] }>>(CHECKJEBON_URL, "json");
       const lidl = (Array.isArray(data) ? data : []).find((s) => s.n === "lidl");
-      const index = buildPriceIndex(lidl?.d ?? []);
+      this.checkjebon = Array.isArray(lidl?.d) ? lidl!.d : [];
+      const index = buildPriceIndex(this.checkjebon);
       scraperLogger.debug(`Lidl catalog: ${index.byId.size} checkjebon prices loaded`);
       return index;
     } catch (error: any) {
       scraperLogger.warn(`Lidl catalog: checkjebon prices unavailable (${error?.message}), continuing without prices`);
+      this.checkjebon = [];
       return buildPriceIndex([]);
     }
   }
@@ -333,6 +346,7 @@ class LidlCatalogClient extends CatalogClient {
     const queue = [START_PATH];
     const visited = new Set<string>(); // page ids
     const seen = new Set<string>();
+    const shown = { articleNumbers: new Set<string>(), names: new Set<string>() };
     let withPrice = 0;
 
     while (queue.length > 0 && visited.size < MAX_PAGES) {
@@ -358,6 +372,9 @@ class LidlCatalogClient extends CatalogClient {
         const product = mapLidlProduct(tile, index);
         if (!product || seen.has(product.externalId)) continue;
         seen.add(product.externalId);
+        shown.articleNumbers.add(product.externalId);
+        if (product.articleNumber) shown.articleNumbers.add(product.articleNumber);
+        shown.names.add(normalizeName(product.name));
         if (product.price !== null) withPrice++;
         products.push(product);
       }
@@ -387,6 +404,9 @@ class LidlCatalogClient extends CatalogClient {
         const product = item?.gridbox?.data ? mapLidlProduct(item.gridbox.data, index) : null;
         if (!product || seen.has(product.externalId)) continue;
         seen.add(product.externalId);
+        shown.articleNumbers.add(product.externalId);
+        if (product.articleNumber) shown.articleNumbers.add(product.articleNumber);
+        shown.names.add(normalizeName(product.name));
         if (product.price !== null) withPrice++;
         products.push(product);
       }
@@ -396,10 +416,43 @@ class LidlCatalogClient extends CatalogClient {
       await sleep(REQUEST_DELAY_MS);
     }
 
+    const fromSite = seen.size;
+
+    const added = await this.addFromCheckjebon(shown, onPage);
     scraperLogger.info(
-      `Lidl catalog: ${seen.size} food products (${fromPages} from ${visited.size} pages, ` +
-        `${seen.size - fromPages} more from the search), ${withPrice} with a price`
+      `Lidl catalog: ${fromSite + added} food products (${fromPages} from ${visited.size} pages, ` +
+        `${fromSite - fromPages} more from the search, ${added} add-only from checkjebon), ` +
+        `${withPrice + added} with a price`
     );
+  }
+
+  /**
+   * The store assortment lidl.nl does not show, from checkjebon, as add-only
+   * products (clients/lidl/LidlCheckjebon.ts). Skipped, with a warning, when
+   * there is no training data or no dataset; the site's products stay.
+   */
+  private async addFromCheckjebon(
+    shown: { articleNumbers: Set<string>; names: Set<string> },
+    onPage: (products: ICatalogProduct[]) => Promise<void>
+  ): Promise<number> {
+    if (this.checkjebon.length === 0) return 0;
+    let training: CategorizedName[];
+    try {
+      training = await this.training();
+    } catch (error: any) {
+      scraperLogger.warn(`Lidl catalog: no training data for checkjebon additions (${error?.message}), skipped`);
+      return 0;
+    }
+    const model = learnLidlFood(training, this.checkjebon);
+    if (!model) {
+      scraperLogger.warn("Lidl catalog: too little AH catalog to learn food from, checkjebon additions skipped");
+      return 0;
+    }
+    const additions = checkjebonAdditions(this.checkjebon, shown, model);
+    for (let i = 0; i < additions.length; i += ADDITIONS_PAGE_SIZE) {
+      await onPage(additions.slice(i, i + ADDITIONS_PAGE_SIZE));
+    }
+    return additions.length;
   }
 }
 

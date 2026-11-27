@@ -188,7 +188,40 @@ On 15 October 2026 a run found about 2,360 food products, about half of them wit
 Matching checkjebon on the permanent article number as well (17 October 2026)
 left 421 of the 2,363 products without a price, down from 1,127.
 
+**Lidl store assortment from checkjebon (add-only).** lidl.nl shows only part
+of Lidl's store assortment (November 2026: about 580 food products; "Kaas,
+zuivel & eieren" has 11 online). The checkjebon dataset holds the whole store
+assortment, with only a name, article number, price and pack size per row.
+After the two lidl.nl sources the client adds the checkjebon rows that are
+food and that lidl.nl did not show in the run (by article number or name),
+one per article number and per name, without a plausible price (under 0.05)
+or webshop articles ("Stellingkast-0452484") (`clients/lidl/LidlCheckjebon.ts`):
+
+- **Only adding, never changing.** These products are add-only (FR-007.15): a
+  row of Lidl that already exists by external id, article number or name is
+  never changed, whatever its origin (lidl.nl, an offer, an earlier run). Only
+  a row checkjebon added itself (`catalog_source` `checkjebon`) stays in the
+  catalog with its price refreshed. When lidl.nl later shows the product, its
+  own data takes the checkjebon row over (by article number or name) and the
+  row becomes Lidl's (`catalog_source` null).
+- **Food and category** are learned in each run from Albert Heijn's catalog in
+  the database (`utils/NameClassifier.ts`, naive Bayes over name words and
+  4-letter pieces, so compounds such as "bergkaas" are read): AH's food
+  categories against its non-food ones and checkjebon's webshop articles;
+  pet food is excluded by name and brand. The AH category becomes the matching
+  Lidl category (`Kaas` and `Zuivel, eieren` become `Kaas, zuivelproducten &
+  eieren`, beer is told from wine by name), else `Overig`. Measured in
+  November 2026: 2.6% of held-out webshop articles pass as food; the category
+  is right for about 2 in 3 lidl.nl products. Without an AH catalog in the
+  database (an empty database) the additions are left out, with a warning.
+- These products have no brand, image or product page; their price is
+  checkjebon's (`price_source` `checkjebon`).
+
+Live on 27 November 2026: 581 products from lidl.nl and 8,899 add-only from
+checkjebon, 9,480 in total.
+
 | FR-007.14 | System SHALL store the regular price Lidl shows next to an offer as the catalog product's regular price (`price_source` `supermarket`, `price_observed_at` now, a `price_history` row when it is new or changed) and keep it over an outside dataset for 180 days | HIGH | ✅ Implemented |
+| FR-007.15 | System SHALL add Lidl's store assortment that lidl.nl does not show from the checkjebon dataset as add-only products: food only, never changing an existing row, refreshing only rows it added itself, and taken over by lidl.nl's own data when the product appears there | MEDIUM | ✅ Implemented |
 
 **Lidl regular prices from offers.** Lidl gives an offer its own article
 number (`erpNumber`, e.g. 11305717 for Yakult); the assortment tile has

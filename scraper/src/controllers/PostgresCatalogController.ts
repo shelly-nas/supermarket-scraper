@@ -52,7 +52,11 @@ class PostgresCatalogController {
    *
    * A product is matched on (supermarket, external_id) first, then on
    * (supermarket, name) so an existing offer-only row is upgraded instead of
-   * duplicated. Price history only gets a row when the regular price changes.
+   * duplicated, and on its article number or name to a row an add-only
+   * dataset added, which the supermarket's own data takes over. Add-only
+   * products (ICatalogProduct.addOnly) never change an existing row
+   * (upsertAddOnly). Price history only gets a row when the regular price
+   * changes.
    */
   async upsertBatch(
     supermarket: string,
@@ -80,6 +84,8 @@ class PostgresCatalogController {
     product: ICatalogProduct,
     runStartedAt: Date
   ): Promise<{ created: boolean; priceChanged: boolean } | "skipped"> {
+    if (product.addOnly) return this.upsertAddOnly(client, supermarket, product, runStartedAt);
+
     // Already seen in this run (product listed in several categories).
     const byExternal = await client.query<ExistingProduct & { catalog_updated_at: Date | null }>(
       `SELECT id, regular_price, price_source, price_observed_at, catalog_updated_at FROM products
@@ -92,14 +98,25 @@ class PostgresCatalogController {
     }
 
     let name = product.name;
+    if (!existing && product.articleNumber) {
+      // A row an add-only dataset added under this article number.
+      const added = await client.query<ExistingProduct>(
+        `SELECT id, regular_price, price_source, price_observed_at FROM products
+         WHERE supermarket = $1 AND catalog_source IS NOT NULL
+           AND (ltrim(external_id, '0') = $2 OR ltrim(article_number, '0') = $2)
+         LIMIT 1`,
+        [supermarket, product.articleNumber.replace(/^0+/, "")]
+      );
+      existing = added.rows[0];
+    }
     if (!existing) {
-      const byName = await client.query<ExistingProduct & { external_id: string | null }>(
-        `SELECT id, regular_price, price_source, price_observed_at, external_id FROM products
+      const byName = await client.query<ExistingProduct & { external_id: string | null; catalog_source: string | null }>(
+        `SELECT id, regular_price, price_source, price_observed_at, external_id, catalog_source FROM products
          WHERE supermarket = $1 AND name = $2`,
         [supermarket, name]
       );
       const sameName = byName.rows[0];
-      if (sameName && sameName.external_id === null) {
+      if (sameName && (sameName.external_id === null || sameName.catalog_source !== null)) {
         existing = sameName;
       } else if (sameName) {
         // Two different products with the same title: make the name unique.
@@ -139,7 +156,7 @@ class PostgresCatalogController {
            quantity_value = $10, quantity_unit = $11,
            ean = COALESCE($12, ean), match_brand = $13, match_tokens = $14,
            price_observed_at = $15, article_number = COALESCE($16, article_number),
-           category = $17, in_catalog = true, catalog_updated_at = NOW()
+           category = $17, catalog_source = NULL, in_catalog = true, catalog_updated_at = NOW()
          WHERE id = $1`,
         [existing.id, ...values, product.category]
       );
@@ -166,6 +183,84 @@ class PostgresCatalogController {
       [name, product.category, supermarket, ...values]
     );
     if (price !== null) await this.recordPrice(client, inserted.rows[0].id, price);
+    return { created: true, priceChanged: false };
+  }
+
+  /**
+   * An add-only product: inserted when no row of the supermarket has its
+   * external id, article number or name. When rows match, the product only
+   * touches one the same dataset added itself (catalog_source): it stays in
+   * the catalog and its price is refreshed. A row from any other source is
+   * left exactly as it is.
+   */
+  private async upsertAddOnly(
+    client: PoolClient,
+    supermarket: string,
+    product: ICatalogProduct,
+    runStartedAt: Date
+  ): Promise<{ created: boolean; priceChanged: boolean } | "skipped"> {
+    const source = product.priceSource ?? "dataset";
+    const number = (product.articleNumber ?? product.externalId).replace(/^0+/, "");
+    const matches = await client.query<
+      ExistingProduct & { catalog_source: string | null; catalog_updated_at: Date | null }
+    >(
+      `SELECT id, regular_price, price_source, price_observed_at, catalog_source, catalog_updated_at FROM products
+       WHERE supermarket = $1
+         AND (ltrim(external_id, '0') = $2 OR ltrim(article_number, '0') = $2 OR lower(name) = lower($3))`,
+      [supermarket, number, product.name]
+    );
+    if (matches.rows.some((row) => row.catalog_source !== source)) return "skipped";
+
+    const own = matches.rows[0];
+    if (own) {
+      if (own.catalog_updated_at && own.catalog_updated_at >= runStartedAt) return "skipped";
+      // A regular price Lidl itself showed next to an offer stays (FR-007.14).
+      if (keepsObservedPrice(own, product, new Date())) {
+        await client.query(`UPDATE products SET in_catalog = true, catalog_updated_at = NOW() WHERE id = $1`, [own.id]);
+        return { created: false, priceChanged: false };
+      }
+      await client.query(
+        `UPDATE products SET regular_price = $2, price_source = $3, in_catalog = true, catalog_updated_at = NOW()
+         WHERE id = $1`,
+        [own.id, product.price, product.priceSource]
+      );
+      const previous = own.regular_price === null ? null : parseFloat(own.regular_price);
+      const changed = previous !== null && product.price !== null && Math.abs(previous - product.price) >= 0.005;
+      if (product.price !== null && (previous === null || changed)) await this.recordPrice(client, own.id, product.price);
+      return { created: false, priceChanged: changed };
+    }
+
+    const quantity = product.quantity !== undefined ? product.quantity : parseQuantity(product.unitSize);
+    const match = matchFields(product.name, product.brand);
+    const inserted = await client.query<{ id: number }>(
+      `INSERT INTO products
+         (name, category, supermarket, external_id, brand, unit_size, image_url, regular_price,
+          unit_price, product_url, price_source, quantity_value, quantity_unit, ean,
+          match_brand, match_tokens, article_number, catalog_source, in_catalog, catalog_updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, true, NOW())
+       RETURNING id`,
+      [
+        product.name,
+        product.category,
+        supermarket,
+        product.externalId,
+        product.brand,
+        product.unitSize,
+        product.imageUrl,
+        product.price,
+        product.unitPrice,
+        product.productUrl,
+        product.priceSource,
+        quantity?.value ?? null,
+        quantity?.unit ?? null,
+        normalizeEan(product.ean),
+        match.matchBrand,
+        match.matchTokens,
+        number,
+        source,
+      ]
+    );
+    if (product.price !== null) await this.recordPrice(client, inserted.rows[0].id, product.price);
     return { created: true, priceChanged: false };
   }
 
