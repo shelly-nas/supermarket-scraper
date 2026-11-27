@@ -44,7 +44,8 @@ class PostgresScheduledRunController {
    * Records the next run of a supermarket and the end date of its current
    * offers (utils/Schedule.ts decides when). A new row is enabled; an existing
    * row keeps its enabled setting, so a manual run does not switch the
-   * automatic runs back on. Without an end date the previous one is kept.
+   * automatic runs back on. Without an end date the previous one is kept (a
+   * new row has none, migration 009).
    */
   async upsertScheduledRun(
     supermarket: string,
@@ -56,12 +57,14 @@ class PostgresScheduledRunController {
     );
     try {
       const result = await this.db.query<{ id: number }>(
+        // Explicit casts: Postgres cannot deduce one type for a parameter used
+        // both as a column value and inside COALESCE ("inconsistent types").
         `INSERT INTO scheduled_runs (supermarket, next_run_at, promotion_expire_date, enabled)
-         VALUES ($1, $2, COALESCE($3, $2), true)
+         VALUES ($1, $2::timestamp, $3::timestamp, true)
          ON CONFLICT (supermarket)
          DO UPDATE SET
            next_run_at = EXCLUDED.next_run_at,
-           promotion_expire_date = COALESCE($3, scheduled_runs.promotion_expire_date)
+           promotion_expire_date = COALESCE($3::timestamp, scheduled_runs.promotion_expire_date)
          RETURNING id`,
         [supermarket, nextRunAt, promotionExpireDate]
       );
