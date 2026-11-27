@@ -23,4 +23,11 @@ export interface ICatalogProduct {
   ean?: string | null;
   /** Permanent article number when it differs from externalId (Lidl `nat`); offers are linked by it. */
   articleNumber?: string | null;
+  /**
+   * From an outside dataset (checkjebon for Lidl) that may only add products:
+   * a row that already exists by external id, article number or name is never
+   * changed. A row the dataset added itself is kept in the catalog and gets
+   * its price refreshed (PostgresCatalogController).
+   */
+  addOnly?: boolean;
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { pickByQuantity } from "../controllers/PostgresProductController";
 import { keepsObservedPrice, OBSERVED_PRICE_MAX_AGE_DAYS } from "../controllers/PostgresCatalogController";
+import { offerReplacesPrice } from "../controllers/PostgresProductController";
 import PostgresDataManager from "../data/PostgresDataManager";
 
 vi.mock("../data/PostgresDataContext", () => ({
@@ -46,9 +47,14 @@ describe("keepsObservedPrice", () => {
     price_observed_at: daysAgo(days),
   });
 
-  it("keeps a recent price of the supermarket's own over checkjebon or no price", () => {
+  it("keeps a recent price of the supermarket's own over a lower checkjebon price or none", () => {
     expect(keepsObservedPrice(observed(10), { price: 1.38, priceSource: "checkjebon" }, now)).toBe(true);
+    expect(keepsObservedPrice(observed(10), { price: 1.65, priceSource: "checkjebon" }, now)).toBe(true);
     expect(keepsObservedPrice(observed(10), { price: null, priceSource: null }, now)).toBe(true);
+  });
+
+  it("lets a higher checkjebon price replace it: the worst case, prices mostly go up", () => {
+    expect(keepsObservedPrice(observed(10), { price: 1.79, priceSource: "checkjebon" }, now)).toBe(false);
   });
 
   it("takes the catalog's own price and lets an old observation go", () => {
@@ -121,5 +127,17 @@ describe("offer with a regular price and its own article number", () => {
     const products = (dm as any).productController;
     expect(products.setRegularPriceFromOffer).not.toHaveBeenCalled();
     expect(products.addProductByExternalId.mock.calls[0][5]).toBeUndefined();
+  });
+});
+
+describe("offerReplacesPrice", () => {
+  it("lets the regular price Lidl shows next to an offer replace the stored one", () => {
+    expect(offerReplacesPrice({ regular_price: null, price_source: null }, 2.49)).toBe(true);
+    expect(offerReplacesPrice({ regular_price: "2.29", price_source: "checkjebon" }, 2.49)).toBe(true);
+    expect(offerReplacesPrice({ regular_price: "2.79", price_source: "supermarket" }, 2.49)).toBe(true);
+  });
+
+  it("keeps a higher price from an outside dataset", () => {
+    expect(offerReplacesPrice({ regular_price: "2.79", price_source: "checkjebon" }, 2.49)).toBe(false);
   });
 });

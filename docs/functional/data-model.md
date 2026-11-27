@@ -408,6 +408,7 @@ To close that gap, the scraper API applies migrations itself:
 | `004_quantity.sql`      | `products.quantity_value`, `products.quantity_unit` (pack quantity in kg, l or stuk) |
 | `005_product_matching.sql` | `products.ean`, `products.match_brand`, `products.match_tokens` and their indexes (same product across supermarkets, FR-008) |
 | `007_article_number.sql` | `products.article_number` (Lidl permanent article number) and `products.price_observed_at` (when the supermarket itself last showed the regular price, FR-007.14) |
+| `010_catalog_source.sql` | `products.catalog_source`: the dataset that added a row as add-only (`checkjebon`), null for the supermarket's own rows (FR-007.15) |
 | `009_one_run.sql` | `scraper_runs.catalog_products`, `catalog_prices_changed`, `catalog_products_removed` (one run per supermarket, FR-003.9); `scheduled_runs.promotion_expire_date` nullable (a schedule row before the first run, FR-003.13); `catalog_runs` no longer written |
 
 **Result:** a redeploy of the scraper API is sufficient to bring an existing database

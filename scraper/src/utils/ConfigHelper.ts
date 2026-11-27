@@ -15,6 +15,17 @@ import DirkCatalogClient from "../clients/catalog/DirkCatalogClient";
 import PlusCatalogClient from "../clients/catalog/PlusCatalogClient";
 import AldiCatalogClient from "../clients/catalog/AldiCatalogClient";
 import { serverLogger } from "./Logger";
+import PostgresDataContext from "../data/PostgresDataContext";
+import { getDatabaseConfig } from "../config/database";
+import type { CategorizedName } from "../clients/lidl/LidlCheckjebon";
+
+/** AH's catalog names with their category: what the Lidl checkjebon additions learn food from. */
+async function ahCatalogNames(): Promise<CategorizedName[]> {
+  const result = await PostgresDataContext.getInstance(getDatabaseConfig()).query<CategorizedName>(
+    "SELECT name, category FROM products WHERE supermarket = 'Albert Heijn' AND in_catalog = true"
+  );
+  return result.rows;
+}
 
 export function getSupermarketClient(name: string): ApiClient {
   switch (name) {
@@ -48,7 +59,7 @@ export function getCatalogClient(name: string): CatalogClient | null {
     case "Albert Heijn":
       return new AhCatalogClient();
     case "Lidl":
-      return new LidlCatalogClient();
+      return new LidlCatalogClient(undefined, ahCatalogNames);
     case "Hoogvliet":
       return new HoogvlietCatalogClient();
     case "Jumbo":

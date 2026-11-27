@@ -37,6 +37,20 @@ export interface OfferDetails {
   ean: string | null;
 }
 
+/**
+ * Whether the regular price a supermarket shows next to an offer replaces the
+ * stored one: always, except a higher price from an outside dataset
+ * (checkjebon), which stays as the worst case, the same rule as
+ * PostgresCatalogController.keepsObservedPrice the other way round.
+ */
+export function offerReplacesPrice(
+  current: { regular_price: string | null; price_source: string | null },
+  price: number
+): boolean {
+  if (current.regular_price === null || current.price_source === "supermarket") return true;
+  return parseFloat(current.regular_price) < price + 0.005;
+}
+
 class PostgresProductController {
   private db: PostgresDataContext;
 
@@ -337,11 +351,11 @@ class PostgresProductController {
    */
   async setRegularPriceFromOffer(id: number, price: number): Promise<boolean> {
     return this.db.transaction(async (client) => {
-      const current = await client.query<{ regular_price: string | null }>(
-        "SELECT regular_price FROM products WHERE id = $1 FOR UPDATE",
+      const current = await client.query<{ regular_price: string | null; price_source: string | null }>(
+        "SELECT regular_price, price_source FROM products WHERE id = $1 FOR UPDATE",
         [id]
       );
-      if (current.rows.length === 0) return false;
+      if (current.rows.length === 0 || !offerReplacesPrice(current.rows[0], price)) return false;
       await client.query(
         `UPDATE products SET regular_price = $2, price_source = 'supermarket',
            price_observed_at = NOW() WHERE id = $1`,

@@ -12,6 +12,7 @@ import LidlCatalogClient, {
   LidlGridData,
 } from "../clients/catalog/LidlCatalogClient";
 import { ICatalogProduct } from "../interfaces/ICatalogProduct";
+import { training } from "./fixtures/ahTraining";
 
 vi.mock("../utils/Logger", () => ({
   scraperLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -169,13 +170,13 @@ describe("Lidl catalog client", () => {
   /** `search`: the food tree's search results, two per page; "fail" for a search that fails. */
   function fakeHttp(
     pages: Record<string, string>,
-    options: { failPrices?: boolean; search?: LidlGridData[] | "fail" } = {}
+    options: { failPrices?: boolean; search?: LidlGridData[] | "fail"; checkjebon?: any[] } = {}
   ) {
     return {
       get: vi.fn().mockImplementation(async (url: string) => {
         if (url.includes("checkjebon")) {
           if (options.failPrices) throw { response: { status: 404 } };
-          return { data: checkjebon };
+          return { data: options.checkjebon ?? checkjebon };
         }
         if (url.includes("/q/api/search")) {
           if (options.search === "fail") throw { response: { status: 404 } };
@@ -253,6 +254,38 @@ describe("Lidl catalog client", () => {
       seen.push(...p.map((x) => x.externalId));
     });
     expect(seen).toEqual(["1"]);
+  });
+
+  it("adds the checkjebon store assortment after the site, add-only, when it can learn food", async () => {
+    const dataset = [
+      { n: "ah", d: [] },
+      {
+        n: "lidl",
+        d: [
+          { n: "Product 1", l: "1", p: 1.5, s: "" }, // shown on lidl.nl
+          { n: "Oude kaas", l: "777", p: 3.49, s: "500 g" },
+          { n: "Wasmiddel wit", l: "778", p: 4.99, s: "" },
+        ],
+      },
+    ];
+    const pages = {
+      "/c/assortiment-producten/s10008015": page([], ["/c/assortiment-kaas/a1"]),
+      "/c/assortiment-kaas/a1": page([tile("1")]),
+    };
+    const delivered: ICatalogProduct[][] = [];
+    await new LidlCatalogClient(fakeHttp(pages, { checkjebon: dataset }) as any, async () => training()).fetchCatalog(
+      async (p) => {
+        delivered.push(p);
+      }
+    );
+    expect(delivered.map((p) => p.map((x) => x.externalId))).toEqual([["1"], ["777"]]);
+    expect(delivered[1][0]).toMatchObject({ name: "Oude kaas", addOnly: true, priceSource: "checkjebon" });
+
+    const withoutTraining: string[] = [];
+    await new LidlCatalogClient(fakeHttp(pages, { checkjebon: dataset }) as any).fetchCatalog(async (p) => {
+      withoutTraining.push(...p.map((x) => x.externalId));
+    });
+    expect(withoutTraining).toEqual(["1"]);
   });
 
   it("follows a meta refresh", async () => {
