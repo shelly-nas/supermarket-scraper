@@ -148,9 +148,9 @@ describe("add-only catalog products", () => {
     expect(statements.filter((s) => !s.startsWith("SELECT"))).toEqual([]);
   });
 
-  it("keeps a regular price Lidl showed next to an offer on a row it added", async () => {
+  it("keeps a higher regular price Lidl showed next to an offer on a row it added", async () => {
     const { metrics, statements } = await store([
-      { id: 5, regular_price: "2.99", catalog_source: "checkjebon", price_source: "supermarket", price_observed_at: new Date() },
+      { id: 5, regular_price: "3.99", catalog_source: "checkjebon", price_source: "supermarket", price_observed_at: new Date() },
     ]);
     expect(metrics).toEqual({ created: 0, updated: 1, pricesChanged: 0 });
     expect(statements.filter((s) => s.startsWith("UPDATE"))).toEqual([

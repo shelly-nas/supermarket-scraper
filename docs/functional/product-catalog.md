@@ -173,7 +173,8 @@ schemes are merged, other worlds become `Overig`). Only tiles with category
 
 1. Lidl's own `oldPrice` when the product is on offer (`supermarket`);
 2. a regular price Lidl itself showed in the last 180 days, next to an offer
-   (FR-007.14); kept instead of the next two (`supermarket`);
+   (FR-007.14); kept instead of the next two (`supermarket`), unless checkjebon's
+   price is higher: prices mostly go up, and the higher one is the worst case;
 3. the open [checkjebon.nl](https://github.com/supermarkt/checkjebon) dataset
    (MIT, refreshed daily; its Lidl data comes from boodschaapje.nl), matched on
    the tile's article number (`erpNumber`), else on the permanent article
@@ -220,7 +221,7 @@ or webshop articles ("Stellingkast-0452484") (`clients/lidl/LidlCheckjebon.ts`):
 Live on 27 November 2026: 581 products from lidl.nl and 8,899 add-only from
 checkjebon, 9,480 in total.
 
-| FR-007.14 | System SHALL store the regular price Lidl shows next to an offer as the catalog product's regular price (`price_source` `supermarket`, `price_observed_at` now, a `price_history` row when it is new or changed) and keep it over an outside dataset for 180 days | HIGH | ✅ Implemented |
+| FR-007.14 | System SHALL store the regular price Lidl shows next to an offer as the catalog product's regular price (`price_source` `supermarket`, `price_observed_at` now, a `price_history` row when it is new or changed) and keep it over an outside dataset for 180 days, unless the dataset's price is higher; a higher dataset price is not replaced by the price next to an offer either, so the stored regular price is the higher of the two. The offer's discount price never becomes the regular price: it lives in `discounts` and is deactivated when the offer ends | HIGH | ✅ Implemented |
 | FR-007.15 | System SHALL add Lidl's store assortment that lidl.nl does not show from the checkjebon dataset as add-only products: food only, never changing an existing row, refreshing only rows it added itself, and taken over by lidl.nl's own data when the product appears there | MEDIUM | ✅ Implemented |
 
 **Lidl regular prices from offers.** Lidl gives an offer its own article

@@ -26,6 +26,8 @@ interface ExistingProduct {
  * the run has no price of the supermarket's own (only an outside dataset or
  * none), while the supermarket itself showed the stored price in the last
  * OBSERVED_PRICE_MAX_AGE_DAYS days (Lidl's regular price next to an offer).
+ * A higher dataset price still replaces it: prices mostly go up, and the
+ * higher one is the worst case for a shopping list.
  */
 export function keepsObservedPrice(
   existing: Pick<ExistingProduct, "regular_price" | "price_source" | "price_observed_at">,
@@ -36,7 +38,8 @@ export function keepsObservedPrice(
   if (existing.price_source !== "supermarket" || existing.regular_price === null) return false;
   if (!existing.price_observed_at) return false;
   const ageDays = (now.getTime() - new Date(existing.price_observed_at).getTime()) / 86_400_000;
-  return ageDays <= OBSERVED_PRICE_MAX_AGE_DAYS;
+  if (ageDays > OBSERVED_PRICE_MAX_AGE_DAYS) return false;
+  return product.price === null || product.price < parseFloat(existing.regular_price) + 0.005;
 }
 
 /** Stores catalog products (regular prices) and catalog run bookkeeping. */
